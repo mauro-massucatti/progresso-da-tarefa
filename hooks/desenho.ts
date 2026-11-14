@@ -219,6 +219,8 @@ function anel(partes: string[], cx: number, cy: number, diam: number, fracao: nu
 }
 
 export type Anterior = { barra: number; anel: number }
+// Último desenho de cada superfície, para a próxima versão animar a partir dele.
+export const novosAnteriores = () => new Map<string, Anterior>()
 
 // Painel completo: estado, percentual, distribuição e tempo (ou resumo, ao concluir).
 export function svgPainel(r: Retrato, antes: Anterior | null): { svg: string; altura: number; agora: Anterior } {

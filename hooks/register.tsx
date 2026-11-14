@@ -1,28 +1,19 @@
-import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Plano, Vez } from '../types/valores'
 import { avancar, concluirTudo, contar, corDaPizza, corDoAnel, duracao, hora, marcar, mosaico, situacaoDe, trocarEtapas } from './logica'
-import { COR, L, retrato, svgCompacto, svgDetalhe, svgEtapas, svgPainel, textoAlternativo } from './desenho'
-import type { Anterior } from './desenho'
+import { COR, L, novosAnteriores, retrato, svgCompacto, svgDetalhe, svgEtapas, svgPainel, textoAlternativo } from './desenho'
+import { est, mudar } from './estado'
 import { acaoEmPalavras, arquivoGravado, nomeDoArquivo, registrar } from './acoes'
 
 const PAINEL = 'progresso'
 const TITULO = 'Andamento da tarefa'
 const MIN = 60_000
-// Mude a etiqueta quando o formato de um valor mudar: o valor antigo é ignorado.
-const plano = atom({ plugin: 'progresso-da-tarefa', key: 'plano' } as const, null, { shape: 'plano-2' })
-const ultimoPedido = atom({ plugin: 'progresso-da-tarefa', key: 'ultimoPedido' } as const, '')
-const fechadoPelaPessoa = atom({ plugin: 'progresso-da-tarefa', key: 'fechadoPelaPessoa' } as const, false)
-const vez = atom({ plugin: 'progresso-da-tarefa', key: 'vez' } as const, 'claude' as Vez)
-const compacto = atom({ plugin: 'progresso-da-tarefa', key: 'compacto' } as const, false)
-const etapaAberta = atom({ plugin: 'progresso-da-tarefa', key: 'etapaAberta' } as const, 0)
-const turno = atom({ plugin: 'progresso-da-tarefa', key: 'turno' } as const, '')
 
 // As listas de etapas que o Mod acompanha: a do app (abaixo das mensagens) e as do terminal.
 const FERRAMENTAS = ['mcp__ccd_turn__update_plan', 'mcp__ccd_turn__wrap_up', 'TodoWrite', 'TaskCreate', 'TaskUpdate'] as const
 
-type Args = Record<string, unknown>;
+type Args = { [chave: string]: unknown };
 type Eng = EngineInterface;
 const lista = (v: unknown): unknown[] => (Array.isArray(v) ? v : typeof v === 'string' ? jsonLista(v) : [])
 function jsonLista(s: string): unknown[] {
@@ -30,7 +21,7 @@ function jsonLista(s: string): unknown[] {
 }
 
 // Percentual do limite de 5 horas na última resposta, quando o plano informa.
-async function usoCincoHoras($: Eng): Promise<number | undefined> {
+async function usoCincoHoras($: Eng) {
   try {
     const u = await $.session.usage()
     const janela = u.rateLimits.find(x => /five|5/.test(x.kind))
@@ -42,7 +33,7 @@ async function usoCincoHoras($: Eng): Promise<number | undefined> {
 async function guardar($: Eng) {
   try {
     const id = await $.session.id()
-    await $.store.set(`sessao:${id}`, { plano: await read($, plano), quando: await $.clock.now() })
+    await $.store.set(`sessao:${id}`, { plano: est.plano, quando: await $.clock.now() })
   } catch { /* guardar é conveniência: falhar não pode atrapalhar a tarefa */ }
 }
 
@@ -59,9 +50,9 @@ export const register: Register = on => {
     try {
       const id = await $.session.id()
       const agora = await $.clock.now()
-      if (!(await read($, plano))) {
+      if (!(est.plano)) {
         const salvo = (await $.store.get(`sessao:${id}`)) as { plano?: Plano | null } | undefined
-        if (salvo?.plano) await update($, plano, () => salvo.plano ?? null)
+        if (salvo?.plano) await mudar($, 'plano', () => salvo.plano ?? null)
       }
       for (const chave of await $.store.keys()) {
         if (!chave.startsWith('sessao:')) continue
@@ -77,31 +68,31 @@ export const register: Register = on => {
 
   on('prompt.submit', async ($, e, next) => {
     const texto = typeof e.text === 'string' ? e.text : ''
-    if (texto && !texto.startsWith('/')) await update($, ultimoPedido, () => texto)
-    await update($, vez, () => 'claude' as Vez)
+    if (texto && !texto.startsWith('/')) await mudar($, 'ultimoPedido', () => texto)
+    await mudar($, 'vez', () => 'claude' as Vez)
     return next(e)
   })
 
   // De quem é a vez: o turno do Claude começa e termina.
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) {
-      await update($, turno, () => e.turnId)
-      await update($, vez, () => 'claude' as Vez)
+      await mudar($, 'turno', () => e.turnId)
+      await mudar($, 'vez', () => 'claude' as Vez)
     }
     return next(e)
   })
 
   on('turn.complete', async ($, e, next) => {
     if (e.agentId === undefined) {
-      await update($, turno, () => '')
-      const p = await read($, plano)
+      await mudar($, 'turno', () => '')
+      const p = est.plano
       if (p && p.etapas.length && !p.concluido) {
-        await update($, vez, () => 'voce' as Vez)
-        await update($, plano, v => (v ? { ...v, fazendo: undefined } : v))
+        await mudar($, 'vez', () => 'voce' as Vez)
+        await mudar($, 'plano', v => (v ? { ...v, fazendo: undefined } : v))
         await notificar($, 'O Claude parou e espera sua resposta.')
       }
       const uso = await usoCincoHoras($)
-      if (uso !== undefined) await update($, plano, v => (v ? { ...v, usoAgora: uso } : v))
+      if (uso !== undefined) await mudar($, 'plano', v => (v ? { ...v, usoAgora: uso } : v))
       await guardar($)
     }
     return next(e)
@@ -112,22 +103,22 @@ export const register: Register = on => {
     const a = e as unknown as Args
     const tool = String(a.tool)
     const frase = acaoEmPalavras(tool, a)
-    const p0 = await read($, plano)
+    const p0 = est.plano
     const ativo = !!p0 && !p0.concluido && p0.etapas.length > 0
     const caminho = arquivoGravado(tool, a)
     const existia = tool !== 'Write'
-    if (tool === 'AskUserQuestion') await update($, vez, () => 'pergunta' as Vez)
-    if (ativo && frase) await update($, plano, v => (v ? { ...v, fazendo: frase } : v))
+    if (tool === 'AskUserQuestion') await mudar($, 'vez', () => 'pergunta' as Vez)
+    if (ativo && frase) await mudar($, 'plano', v => (v ? { ...v, fazendo: frase } : v))
 
     const resultado = await next(e)
 
-    if (tool === 'AskUserQuestion') await update($, vez, () => 'claude' as Vez)
+    if (tool === 'AskUserQuestion') await mudar($, 'vez', () => 'claude' as Vez)
     if (ativo && frase) {
       const negado = 'deny' in resultado && !!resultado.deny
       const falhou = !negado && !!resultado.isError
       const gravou = !negado && !falhou ? caminho : null
       const agora = await $.clock.now()
-      await update($, plano, v => (v ? registrar(v, frase, gravou, !existia, falhou, agora) : v))
+      await mudar($, 'plano', v => (v ? registrar(v, frase, gravou, !existia, falhou, agora) : v))
     }
     return resultado
   }).catch(($, e, next) => next(e))
@@ -138,8 +129,8 @@ export const register: Register = on => {
     if ('deny' in resultado && resultado.deny) return resultado
     const a = e as unknown as Args
     const agora = await $.clock.now()
-    const pedido = await read($, ultimoPedido)
-    const antes = await read($, plano)
+    const pedido = est.ultimoPedido
+    const antes = est.plano
     let depois: Plano | null = antes
     const nome = String(a.tool)
 
@@ -193,16 +184,16 @@ export const register: Register = on => {
       if (novo) {
         const uso = await usoCincoHoras($)
         if (uso !== undefined) depois = { ...depois, usoInicio: uso, usoAgora: uso }
-        await update($, etapaAberta, () => 0)
+        await mudar($, 'etapaAberta', () => 0)
       }
       if (depois.concluido) depois = { ...depois, fazendo: undefined }
       const final = depois
-      await update($, plano, () => final)
+      await mudar($, 'plano', () => final)
       if (final.concluido && !antes?.concluido) {
-        await update($, vez, () => 'claude' as Vez)
+        await mudar($, 'vez', () => 'claude' as Vez)
         await notificar($, `Tarefa concluída em ${duracao(final.concluido - final.inicio)}.`)
       }
-      if (novo && final.etapas.length >= 2 && !(await read($, fechadoPelaPessoa))) {
+      if (novo && final.etapas.length >= 2 && !(est.fechadoPelaPessoa)) {
         void $.ui.open({ id: PAINEL, title: TITULO })
       }
       await guardar($)
@@ -214,30 +205,30 @@ export const register: Register = on => {
     const abertos = await $.ui.panes()
     if (abertos.some(p => p.id === PAINEL)) {
       await $.ui.close({ id: PAINEL })
-      await update($, fechadoPelaPessoa, () => true)
+      await mudar($, 'fechadoPelaPessoa', () => true)
       return { text: 'Painel do andamento fechado. Digite /progresso para abrir de novo.' }
     }
-    await update($, fechadoPelaPessoa, () => false)
+    await mudar($, 'fechadoPelaPessoa', () => false)
     await $.ui.open({ id: PAINEL, title: TITULO })
     return { text: 'Painel do andamento aberto.' }
   })
 
   on('ui.close', async ($, e, next) => {
-    if (e.id === PAINEL && e.origin.kind === 'person') await update($, fechadoPelaPessoa, () => true)
+    if (e.id === PAINEL && e.origin.kind === 'person') await mudar($, 'fechadoPelaPessoa', () => true)
     return next(e)
   })
 
   // Último desenho de cada superfície: a próxima versão anima a partir dele.
-  const anteriores = new Map<string, Anterior>()
+  const anteriores = novosAnteriores()
 
   on('ui.render', { component: 'Pane', requestId: PAINEL }, async ($, e) => {
     const { Box, Text, Button, Select } = $.ui.resolve(e)
-    const p = await read($, plano)
+    const p = est.plano
     const agora = await $.clock.now()
-    const aVez = await read($, vez)
-    const recolhido = await read($, compacto)
-    const aberta = await read($, etapaAberta)
-    const turnoAtual = await read($, turno)
+    const aVez = est.vez
+    const recolhido = est.compacto
+    const aberta = est.etapaAberta
+    const turnoAtual = est.turno
 
     if (!p || !p.etapas.length) {
       return (
@@ -255,7 +246,7 @@ export const register: Register = on => {
     // Controles: recolher ou expandir e parar o Claude.
     const controles = (
       <Box flexDirection="row" gap={1}>
-        <Button key="tamanho" label={recolhido ? 'Expandir' : 'Recolher'} onPress={() => update($, compacto, v => !v)} />
+        <Button key="tamanho" label={recolhido ? 'Expandir' : 'Recolher'} onPress={() => mudar($, 'compacto', v => !v)} />
         {podeParar && <Button key="parar" label="Parar o Claude" onPress={async () => { await $.turn.abort({ turnId: turnoAtual }) }} />}
       </Box>
     )
@@ -276,7 +267,7 @@ export const register: Register = on => {
         <Text dimColor wrap="wrap">Ver o que foi feito numa etapa</Text>
         <Select key="etapa" value={String(aberta)}
           options={[{ value: '0', label: 'Escolha uma etapa' }, ...comAcoes.map(x => ({ value: String(x.n), label: `${x.n}. ${x.nome.length > 22 ? x.nome.slice(0, 21).trimEnd() + '…' : x.nome}` }))]}
-          onSelect={v => { void update($, etapaAberta, () => Number(v) || 0) }} />
+          onSelect={v => { void mudar($, 'etapaAberta', () => Number(v) || 0) }} />
       </Box>
     )
 
@@ -357,10 +348,10 @@ export const register: Register = on => {
 
   // Faixa curta acima da caixa de texto: o mesmo retrato, numa linha.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const p = await read($, plano)
+    const p = est.plano
     if (e.props.hasSurvey || !p || !p.etapas.length || p.concluido) return next(e)
     const { Box, Text, Button, Progress } = $.ui.resolve(e)
-    const r = retrato(p, await $.clock.now(), await read($, vez))
+    const r = retrato(p, await $.clock.now(), est.vez)
     const tempo = `${r.tempo.valor} ${r.tempo.legenda}`
     const texto = r.estado === 'esperando' ? `${r.rotulo.toLowerCase()} · ${r.percentual}%` : `${r.percentual}% · etapa ${r.atual || r.total} de ${r.total} · ${tempo}`
     return (
@@ -370,7 +361,7 @@ export const register: Register = on => {
         </Box>
         <Text><Text color={r.cor}>●</Text> {texto}</Text>
         <Button key="ver" label="Ver painel" plain onPress={async () => {
-          await update($, fechadoPelaPessoa, () => false)
+          await mudar($, 'fechadoPelaPessoa', () => false)
           await $.ui.open({ id: PAINEL, title: TITULO })
         }} />
       </Box>
