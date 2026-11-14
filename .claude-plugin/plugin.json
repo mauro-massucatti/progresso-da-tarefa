@@ -1,9 +1,22 @@
 {
   "name": "progresso-da-tarefa",
-  "version": "0.4.2",
-  "description": "Mostra em barra, pizza e círculo quanto da tarefa da sessão já foi feito e quanto falta para o prazo",
+  "displayName": "Andamento da tarefa",
+  "version": "0.4.3",
+  "description": "Mostra em barra, pizza e círculo quanto da tarefa da sessão já foi feito, quanto falta e o que o Claude está fazendo, em português",
   "author": {
     "name": "Mauro Massucatti Netto"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "homepage": "https://github.com/mauro-massucatti/progresso-da-tarefa",
+  "repository": "https://github.com/mauro-massucatti/progresso-da-tarefa",
+  "documentationUrl": "https://github.com/mauro-massucatti/progresso-da-tarefa#readme",
+  "supportUrl": "https://github.com/mauro-massucatti/progresso-da-tarefa/issues",
+  "privacyPolicyUrl": "https://github.com/mauro-massucatti/progresso-da-tarefa#o-que-o-mod-l%C3%AA-guarda-e-faz",
+  "keywords": [
+    "progresso",
+    "andamento",
+    "painel",
+    "tarefa",
+    "mod"
+  ]
 }
