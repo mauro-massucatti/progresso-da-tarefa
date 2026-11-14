@@ -1,6 +1,5 @@
 // Estado do Mod, em variáveis do próprio arquivo: os ganchos leem e escrevem aqui,
-// e cada mudança pede ao Claude Code para redesenhar o painel e a faixa.
-import type { EngineInterface } from 'claude-code'
+// e cada mudança (mudar, em register.tsx) pede ao Claude Code para redesenhar o painel e a faixa.
 import type { Plano, Vez } from '../types/valores'
 
 export const est = {
@@ -14,7 +13,3 @@ export const est = {
 }
 export type Estado = typeof est
 
-export function mudar<K extends keyof Estado>($: EngineInterface, chave: K, fn: (v: Estado[K]) => Estado[K]) {
-  est[chave] = fn(est[chave])
-  $.ui.invalidate('ui.render')
-}

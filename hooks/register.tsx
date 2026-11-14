@@ -3,7 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Plano, Vez } from '../types/valores'
 import { avancar, concluirTudo, contar, corDaPizza, corDoAnel, duracao, hora, marcar, mosaico, situacaoDe, trocarEtapas } from './logica'
 import { COR, L, novosAnteriores, retrato, svgCompacto, svgDetalhe, svgEtapas, svgPainel, textoAlternativo } from './desenho'
-import { est, mudar } from './estado'
+import { est } from './estado'
+import type { Estado } from './estado'
 import { acaoEmPalavras, arquivoGravado, nomeDoArquivo, registrar } from './acoes'
 
 const PAINEL = 'progresso'
@@ -27,6 +28,13 @@ async function usoCincoHoras($: Eng) {
     const janela = u.rateLimits.find(x => /five|5/.test(x.kind))
     return janela ? janela.percentUsed : undefined
   } catch { return undefined }
+}
+
+// Muda um valor do estado e pede para redesenhar o painel e a faixa.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mudar($: Eng, chave: keyof Estado, fn: (v: any) => unknown) {
+  (est as { [k: string]: unknown })[chave] = fn(est[chave])
+  $.ui.invalidate('ui.render')
 }
 
 // Guarda o andamento fora da sessão, para sobreviver ao fechamento do app.
