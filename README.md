@@ -65,3 +65,7 @@ claude plugin install progresso-da-tarefa --marketplace mauro-massucatti/progres
 ```
 
 No app Desktop, onde `/plugin` não funciona: clique em + ao lado da caixa de texto, depois Plugins, Add marketplace com `mauro-massucatti/progresso-da-tarefa` e Add plugin.
+
+## Licença
+
+MIT. Veja [LICENSE](LICENSE).
