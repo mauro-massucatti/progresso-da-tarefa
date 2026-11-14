@@ -1,0 +1,9 @@
+{
+  "name": "progresso-da-tarefa",
+  "version": "0.3.0",
+  "description": "Mostra em barra, pizza e círculo quanto da tarefa da sessão já foi feito e quanto falta para o prazo",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Mauro Massucatti Netto"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "progresso-da-tarefa",
+  "description": "Andamento da tarefa da sessão em barra, pizza e círculo, em linguagem simples",
+  "owner": { "name": "Mauro Massucatti Netto" },
+  "plugins": [{ "name": "progresso-da-tarefa", "source": "./" }]
+}
