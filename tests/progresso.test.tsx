@@ -123,18 +123,15 @@ test('quando o turno termina com a tarefa aberta, a vez é da pessoa', async ($,
   expect(guardado.has('sessao:sessao-teste')).toBe(true)
 })
 
-test('botões de prazo e modo compacto', async ($, on) => {
+test('modo compacto', async ($, on) => {
   motor(on)
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true } as never)
   await chamar($, { tool: 'mcp__ccd_turn__update_plan', scope: 'new_task', items: PLANO })
-  const { ui } = await desenhos($)
-  await ui.press({ key: 'p30' })
+  const { ui, todos } = await desenhos($)
+  expect(todos).not.toContain('prazo')
+  expect(await ui.find({ type: 'Button', key: 'p30' })).toBeFalsy()
+  await ui.press({ key: 'tamanho' })
   await ui.unmount()
-  const comPrazo = await desenhos($)
-  expect(comPrazo.todos).toContain('até o prazo')
-  expect(comPrazo.todos).toContain('Ponto verde: trabalho feito')
-  await comPrazo.ui.press({ key: 'tamanho' })
-  await comPrazo.ui.unmount()
   const compacto = await desenhos($)
   expect(compacto.todos).toContain('ETAPA ATUAL')
   expect(compacto.todos).not.toContain('DISTRIBUIÇÃO')
@@ -161,17 +158,6 @@ test('ao concluir, mostra o resumo e nenhuma estimativa', async ($, on) => {
   const faixa = await $.ui.mount({ ...FAIXA, surface: 'desktop' } as never)
   expect(await faixa.find({ type: 'Text', text: /%/ })).toBeFalsy()
   await faixa.unmount()
-})
-
-test('prazo pelo comando', async ($, on) => {
-  motor(on)
-  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true } as never)
-  const r1 = await $.command.run({ command: 'prazo', args: '30min' } as never)
-  expect(String((r1 as { text?: string }).text)).toMatch(/^Prazo marcado para \d\d:\d\d \(daqui a 30 min\)\.$/)
-  const r2 = await $.command.run({ command: 'prazo', args: 'amanhã talvez' } as never)
-  expect(String((r2 as { text?: string }).text)).toMatch(/^Não entendi o prazo/)
-  const r3 = await $.command.run({ command: 'prazo', args: 'limpar' } as never)
-  expect(String((r3 as { text?: string }).text)).toMatch(/^Prazo retirado/)
 })
 
 test('sem tarefa, o painel explica o que vai aparecer', async ($, on) => {

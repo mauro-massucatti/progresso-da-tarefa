@@ -1,7 +1,7 @@
 // Retrato único do andamento e os desenhos do painel.
 // Tudo o que o painel, a faixa e o terminal mostram sai de `retrato()`: um só cálculo,
 // para que nenhum indicador fique atrás dos outros.
-import type { Arquivo, Etapa, Plano, Prazo, Vez } from '../types'
+import type { Arquivo, Etapa, Plano, Vez } from '../types'
 import { duracao, estimarRestante, hora } from './logica'
 
 const MIN = 60_000
@@ -11,11 +11,10 @@ export const COR = {
   feita: '#788C5D',     // concluída
   agora: '#D97757',     // em andamento (o laranja do Claude)
   espera: '#D4A27F',    // esperando você (kraft)
-  atrasada: '#C15F3C',  // tempo à frente do trabalho (argila)
-  vencida: '#A3492B',   // prazo vencido (argila escura)
+  erro: '#C15F3C',      // ação que deu erro (argila)
 } as const
 
-export type Estado = 'aguardando' | 'andamento' | 'esperando' | 'atrasada' | 'vencida' | 'concluida'
+export type Estado = 'aguardando' | 'andamento' | 'esperando' | 'concluida'
 
 export type Retrato = {
   estado: Estado
@@ -39,7 +38,6 @@ export type Retrato = {
     valor: string             // número curto no centro do anel
     legenda: string
     cor: string
-    marcaTrabalho?: number
     linhas: string[]
   }
 }
@@ -59,7 +57,7 @@ const ESPERA: Record<Exclude<Vez, 'claude'>, [string, string]> = {
   autorizacao: ['PEDE AUTORIZAÇÃO', 'O Claude espera sua autorização para seguir.'],
 }
 
-export function retrato(plano: Plano, prazo: Prazo | null, agora: number, vez: Vez = 'claude'): Retrato {
+export function retrato(plano: Plano, agora: number, vez: Vez = 'claude'): Retrato {
   const total = plano.etapas.length
   const feitas = plano.etapas.filter(e => e.situacao === 'feita').length
   const emCurso = plano.etapas.filter(e => e.situacao === 'agora').length
@@ -97,37 +95,12 @@ export function retrato(plano: Plano, prazo: Prazo | null, agora: number, vez: V
   if (vez !== 'claude') base.aviso = ESPERA[vez][1]
   const rotuloDe = (normal: Estado, cor: string): { estado: Estado; rotulo: string; cor: string } => {
     if (vez !== 'claude') return { estado: 'esperando', rotulo: ESPERA[vez][0], cor: COR.espera }
-    const rotulo = normal === 'atrasada' ? 'ATRASADA' : normal === 'vencida' ? 'VENCIDA' : feitas || emCurso ? 'EM ANDAMENTO' : 'AGUARDANDO'
+    const rotulo = feitas || emCurso ? 'EM ANDAMENTO' : 'AGUARDANDO'
     return { estado: normal, rotulo, cor }
   }
   const usoLinha = uso ? [`Consumo: ${uso}% do limite de 5 h`] : []
 
   const decorrido = agora - plano.inicio
-  if (prazo) {
-    const janela = Math.max(MIN, prazo.ate - prazo.desde)
-    const fracao = Math.min(1, Math.max(0, (agora - prazo.desde) / janela))
-    const falta = prazo.ate - agora
-    const trabalho = total ? feitas / total : 0
-    if (falta <= 0) {
-      return {
-        ...base, ...rotuloDe('vencida', COR.vencida),
-        tempo: {
-          fracao: 1, valor: curta(-falta), legenda: 'de atraso', cor: COR.vencida, marcaTrabalho: trabalho,
-          linhas: [`Prazo era às ${hora(prazo.ate)}`, `Faltam ${pendentes + emCurso} de ${total} etapas`, 'Ponto verde: trabalho feito', ...usoLinha],
-        },
-      }
-    }
-    const atrasada = fracao > trabalho + 0.15
-    const cor = atrasada ? COR.atrasada : COR.agora
-    return {
-      ...base, ...rotuloDe(atrasada ? 'atrasada' : 'andamento', cor),
-      tempo: {
-        fracao, valor: curta(falta), legenda: 'até o prazo', cor, marcaTrabalho: trabalho,
-        linhas: [`Prazo às ${hora(prazo.ate)}`, atrasada ? 'Tempo à frente do trabalho' : 'Dentro do prazo', 'Ponto verde: trabalho feito', ...usoLinha],
-      },
-    }
-  }
-
   const resto = estimarRestante(plano, agora)
   if (resto === null) {
     return {
@@ -210,7 +183,7 @@ function blocoEstado(r: Retrato, partes: string[], y0: number): number {
   }
   if (r.erros && r.estado !== 'concluida') {
     for (const l of quebrar(r.erros > 1 ? `${r.erros} ações deram erro e foram refeitas` : '1 ação deu erro e foi refeita', 31)) {
-      partes.push(`<text x="0" y="${y + 10}" class="p" style="fill:${COR.atrasada}">${esc(l)}</text>`)
+      partes.push(`<text x="0" y="${y + 10}" class="p" style="fill:${COR.erro}">${esc(l)}</text>`)
       y += 17
     }
   }
@@ -231,7 +204,7 @@ function blocoPercentual(r: Retrato, partes: string[], y0: number, antes: Anteri
 }
 
 // Anel com o texto do centro sempre dentro do círculo: a fonte encolhe se o texto for longo.
-function anel(partes: string[], cx: number, cy: number, diam: number, fracao: number, cor: string, valor: string, legenda: string, antes: number | null, marca?: number) {
+function anel(partes: string[], cx: number, cy: number, diam: number, fracao: number, cor: string, valor: string, legenda: string, antes: number | null) {
   const ra = (diam - TRACO) / 2
   const volta = 2 * Math.PI * ra
   const cheio = Math.min(1, Math.max(0, fracao)) * volta
@@ -239,10 +212,6 @@ function anel(partes: string[], cx: number, cy: number, diam: number, fracao: nu
   if (cheio > 0.5) {
     const de = antes === null ? '0' : (Math.min(1, Math.max(0, antes)) * volta).toFixed(2)
     partes.push(`<circle cx="${cx}" cy="${cy}" r="${ra}" fill="none" style="stroke:${cor}" stroke-width="${TRACO}" stroke-linecap="round" stroke-dasharray="${cheio.toFixed(2)} ${volta.toFixed(2)}" transform="rotate(-90 ${cx} ${cy})">${anima('stroke-dasharray', `${de} ${volta.toFixed(2)}`, `${cheio.toFixed(2)} ${volta.toFixed(2)}`)}</circle>`)
-  }
-  if (marca !== undefined) {
-    const ang = -Math.PI / 2 + marca * 2 * Math.PI
-    partes.push(`<circle cx="${(cx + ra * Math.cos(ang)).toFixed(2)}" cy="${(cy + ra * Math.sin(ang)).toFixed(2)}" r="5" style="fill:${COR.feita}" class="contorno"/>`)
   }
   const interno = (ra - TRACO) * 2 * 0.86
   const tamanho = Math.min(diam / 5.3, interno / Math.max(1, valor.length * 0.58))
@@ -295,7 +264,7 @@ export function svgPainel(r: Retrato, antes: Anterior | null): { svg: string; al
   y += 18
 
   titulo(r.estado === 'concluida' ? 'RESUMO' : 'TEMPO')
-  anel(partes, DIAM / 2, y + DIAM / 2, DIAM, r.tempo.fracao, r.tempo.cor, r.tempo.valor, r.tempo.legenda, antes?.anel ?? null, r.tempo.marcaTrabalho)
+  anel(partes, DIAM / 2, y + DIAM / 2, DIAM, r.tempo.fracao, r.tempo.cor, r.tempo.valor, r.tempo.legenda, antes?.anel ?? null)
   y += DIAM + 14
   r.tempo.linhas.forEach((linha, i) => {
     for (const parte of quebrar(linha, 31)) {
@@ -386,7 +355,7 @@ export function svgCompacto(r: Retrato, antes: Anterior | null): { svg: string; 
   partes.push(`<rect x="0" y="${y + 54}" width="${largura}" height="${TRACO}" rx="${TRACO / 2}" class="trilho"/>`)
   if (emCurso > 0) partes.push(`<rect x="${feita.toFixed(1)}" y="${y + 54}" width="${emCurso.toFixed(1)}" height="${TRACO}" rx="${TRACO / 2}" style="fill:${r.estado === 'esperando' ? COR.espera : COR.agora}" opacity=".55"/>`)
   if (feita > 0) partes.push(`<rect x="0" y="${y + 54}" width="${feita.toFixed(1)}" height="${TRACO}" rx="${TRACO / 2}" style="fill:${COR.feita}">${anima('width', antes ? (antes.barra * largura).toFixed(1) : '0', feita.toFixed(1))}</rect>`)
-  anel(partes, L - d / 2, topo + d / 2, d, r.tempo.fracao, r.tempo.cor, r.tempo.valor, '', antes?.anel ?? null, r.tempo.marcaTrabalho)
+  anel(partes, L - d / 2, topo + d / 2, d, r.tempo.fracao, r.tempo.cor, r.tempo.valor, '', antes?.anel ?? null)
   partes.push(`<text x="${L - d / 2}" y="${topo + d + 14}" text-anchor="middle" class="t3 pp">${esc(r.tempo.legenda)}</text>`)
   y = topo + d + 22
   const atual = r.etapas.find(e => e.situacao === 'agora')

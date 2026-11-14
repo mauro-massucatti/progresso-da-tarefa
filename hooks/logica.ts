@@ -1,5 +1,5 @@
 // Contas do progresso: sem chamadas ao engine, para poder testar sozinhas.
-import type { Etapa, Plano, Prazo, Situacao } from '../types'
+import type { Etapa, Plano, Situacao } from '../types'
 
 const MIN = 60_000
 
@@ -112,29 +112,6 @@ export function estimarRestante(plano: Plano, agora: number): number | null {
   return Math.round(restoAtual + c.faltam * media)
 }
 
-// Prazo: "30min", "1h", "1h30", "2 horas", "18:30", "18h30".
-export function lerPrazo(texto: string, agora: number): Prazo | null | 'invalido' {
-  const t = texto.trim().toLowerCase().replace(/\s+/g, ' ')
-  if (!t) return 'invalido'
-  if (/^(limpar|tirar|sem prazo|sem|nenhum|apagar)$/.test(t)) return null
-  let m = t.match(/^(\d{1,3}) ?(m|min|mins|minuto|minutos)$/)
-  if (m) return { ate: agora + Number(m[1]) * MIN, desde: agora, texto: `${m[1]} min` }
-  m = t.match(/^(\d{1,2}) ?(h|hora|horas)(?: ?e? ?(\d{1,2}) ?(m|min|minutos)?)?$/)
-  if (m) {
-    const minutos = Number(m[1]) * 60 + Number(m[3] ?? 0)
-    return { ate: agora + minutos * MIN, desde: agora, texto: m[3] ? `${m[1]} h ${m[3]} min` : `${m[1]} h` }
-  }
-  m = t.match(/^(?:às |as |até |ate )?(\d{1,2})[:h](\d{2})$/)
-  if (m && Number(m[1]) < 24 && Number(m[2]) < 60) {
-    const d = new Date(agora)
-    d.setHours(Number(m[1]), Number(m[2]), 0, 0)
-    let ate = d.getTime()
-    if (ate <= agora) ate += 24 * 60 * MIN
-    return { ate, desde: agora, texto: `até ${hora(ate)}` }
-  }
-  return 'invalido'
-}
-
 export const hora = (ms: number): string => {
   const d = new Date(ms)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -149,55 +126,13 @@ export function duracao(ms: number): string {
   return r ? `${h} h ${r} min` : `${h} h`
 }
 
-export type Ritmo = 'concluida' | 'no-ritmo' | 'atrasada' | 'vencida' | 'sem-prazo'
-
-// Leitura do tempo: quanto do prazo já passou, ou quanto da previsão.
-export function lerTempo(plano: Plano, prazo: Prazo | null, agora: number) {
-  const c = contar(plano)
-  const decorrido = (plano.concluido ?? agora) - plano.inicio
-  if (plano.concluido) {
-    return { ritmo: 'concluida' as Ritmo, fracao: 1, centro: 'pronta', frase: `Tarefa concluída em ${duracao(decorrido)}, às ${hora(plano.concluido)}.` }
-  }
-  if (prazo) {
-    const janela = Math.max(MIN, prazo.ate - prazo.desde)
-    const fracao = Math.min(1, Math.max(0, (agora - prazo.desde) / janela))
-    const falta = prazo.ate - agora
-    if (falta <= 0) {
-      return { ritmo: 'vencida' as Ritmo, fracao: 1, centro: 'venceu', frase: `O prazo (${hora(prazo.ate)}) venceu há ${duracao(-falta)}. Faltam ${c.faltam + c.agora} de ${c.total} etapas.` }
-    }
-    const atrasada = fracao > c.fracao + 0.15
-    return {
-      ritmo: (atrasada ? 'atrasada' : 'no-ritmo') as Ritmo,
-      fracao,
-      centro: duracao(falta),
-      frase: atrasada
-        ? `Faltam ${duracao(falta)} para o prazo (${hora(prazo.ate)}), e o tempo está andando mais rápido que as etapas.`
-        : `Faltam ${duracao(falta)} para o prazo (${hora(prazo.ate)}). O andamento está dentro do prazo.`,
-    }
-  }
-  const resto = estimarRestante(plano, agora)
-  if (resto === null) {
-    return { ritmo: 'sem-prazo' as Ritmo, fracao: 0, centro: duracao(decorrido), frase: `Começou às ${hora(plano.inicio)}, há ${duracao(decorrido)}. A previsão aparece quando a primeira etapa terminar.` }
-  }
-  return {
-    ritmo: 'sem-prazo' as Ritmo,
-    fracao: decorrido / Math.max(1, decorrido + resto),
-    centro: `~${duracao(resto)}`,
-    frase: `Começou às ${hora(plano.inicio)}. Pelo ritmo até agora, deve terminar por volta de ${hora(agora + resto)} (estimativa).`,
-  }
-}
-
 // Mesma paleta do desenho (Anthropic), para o mosaico do terminal.
 export const CORES = {
   feita: '#788C5D',
   agora: '#D97757',
   falta: '#87867F',
   trilho: '#3D3D3A',
-  'no-ritmo': '#D97757',
-  atrasada: '#C15F3C',
-  vencida: '#A3492B',
   concluida: '#788C5D',
-  'sem-prazo': '#6A9BCC',
 } as const
 
 // Fatias da pizza: concluídas, em andamento e as que faltam.
@@ -226,7 +161,7 @@ export function svgPizza(c: Contagem, tamanho: number): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${tamanho}" height="${tamanho}" viewBox="0 0 ${tamanho} ${tamanho}">${partes.join('')}</svg>`
 }
 
-// Anel do tempo: quanto do prazo (ou da previsão) já passou, com o número no meio.
+// Anel do tempo: quanto da previsão já passou, com o número no meio.
 export function svgAnel(fracao: number, cor: string, centro: string, legenda: string, tamanho: number): string {
   const r = tamanho / 2 - 9
   const cx = tamanho / 2

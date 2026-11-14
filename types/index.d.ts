@@ -21,7 +21,6 @@ export type Plano = {
   usoInicio?: number   // percentual do limite de 5 horas quando a tarefa começou
   usoAgora?: number    // o mesmo percentual na última leitura
 }
-export type Prazo = { ate: number; desde: number; texto: string; avisou5?: boolean; avisouVencido?: boolean }
 // De quem é a vez: o Claude trabalhando, o Claude esperando uma resposta sua ou a sua autorização.
 export type Vez = 'claude' | 'voce' | 'pergunta' | 'autorizacao'
 
@@ -29,7 +28,6 @@ declare module 'claude-code' {
   interface PluginState {
     'progresso-da-tarefa': {
       plano: Shaped<Plano | null>
-      prazo: Shaped<Prazo | null>
       ultimoPedido: string
       fechadoPelaPessoa: boolean
       vez: Vez

@@ -1,8 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Plano, Prazo, Vez } from '../types'
-import { avancar, concluirTudo, contar, corDaPizza, corDoAnel, duracao, hora, lerPrazo, marcar, mosaico, situacaoDe, trocarEtapas } from './logica'
+import type { Plano, Vez } from '../types'
+import { avancar, concluirTudo, contar, corDaPizza, corDoAnel, duracao, hora, marcar, mosaico, situacaoDe, trocarEtapas } from './logica'
 import { COR, L, retrato, svgCompacto, svgDetalhe, svgEtapas, svgPainel, textoAlternativo } from './desenho'
 import type { Anterior } from './desenho'
 import { acaoEmPalavras, arquivoGravado, nomeDoArquivo, registrar } from './acoes'
@@ -12,7 +12,6 @@ const TITULO = 'Andamento da tarefa'
 const MIN = 60_000
 // Mude a etiqueta quando o formato de um valor mudar: o valor antigo é ignorado.
 const plano = atom({ plugin: 'progresso-da-tarefa', key: 'plano' } as const, null, { shape: 'plano-2' })
-const prazo = atom({ plugin: 'progresso-da-tarefa', key: 'prazo' } as const, null, { shape: 'prazo-2' })
 const ultimoPedido = atom({ plugin: 'progresso-da-tarefa', key: 'ultimoPedido' } as const, '')
 const fechadoPelaPessoa = atom({ plugin: 'progresso-da-tarefa', key: 'fechadoPelaPessoa' } as const, false)
 const vez = atom({ plugin: 'progresso-da-tarefa', key: 'vez' } as const, 'claude' as Vez)
@@ -43,7 +42,7 @@ async function usoCincoHoras($: Eng): Promise<number | undefined> {
 async function guardar($: Eng) {
   try {
     const id = await $.session.id()
-    await $.store.set(`sessao:${id}`, { plano: await read($, plano), prazo: await read($, prazo), quando: await $.clock.now() })
+    await $.store.set(`sessao:${id}`, { plano: await read($, plano), quando: await $.clock.now() })
   } catch { /* guardar é conveniência: falhar não pode atrapalhar a tarefa */ }
 }
 
@@ -54,30 +53,17 @@ async function notificar($: Eng, texto: string) {
   try { await $.process.run(['osascript', '-e', `display notification "${limpo}" with title "${TITULO}"`], { timeoutMs: 5000 }) } catch { /* sem aviso do sistema, fica o do app */ }
 }
 
-// Marca, troca ou retira o prazo, pelo comando ou pelos botões.
-async function marcarPrazo($: Eng, texto: string): Promise<string> {
-  const agora = await $.clock.now()
-  const lido = lerPrazo(texto, agora)
-  if (lido === 'invalido') return 'Não entendi o prazo. Exemplos: /prazo 30min, /prazo 1h30, /prazo 18:30, /prazo limpar.'
-  await update($, prazo, () => lido as Prazo | null)
-  await guardar($)
-  if (!lido) return 'Prazo retirado. O círculo volta a mostrar a previsão pelo ritmo.'
-  return `Prazo marcado para ${hora(lido.ate)} (daqui a ${duracao(lido.ate - agora)}).`
-}
-
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'progresso', description: 'Abre ou fecha o painel com o andamento da tarefa' })
-    await $.command.register({ name: 'prazo', description: 'Marca o prazo da tarefa: /prazo 30min, /prazo 1h30, /prazo 18:30 ou /prazo limpar', argumentHint: '[30min | 1h30 | 18:30 | limpar]' })
 
     // Sessão retomada: recupera o andamento guardado e apaga o que tiver mais de 14 dias.
     try {
       const id = await $.session.id()
       const agora = await $.clock.now()
       if (!(await read($, plano))) {
-        const salvo = (await $.store.get(`sessao:${id}`)) as { plano?: Plano | null; prazo?: Prazo | null } | undefined
+        const salvo = (await $.store.get(`sessao:${id}`)) as { plano?: Plano | null } | undefined
         if (salvo?.plano) await update($, plano, () => salvo.plano ?? null)
-        if (salvo?.prazo) await update($, prazo, () => salvo.prazo ?? null)
       }
       for (const chave of await $.store.keys()) {
         if (!chave.startsWith('sessao:')) continue
@@ -86,24 +72,8 @@ export const register: Register = on => {
       }
     } catch { /* sem memória guardada, começa vazio */ }
 
-    // A cada 30 segundos: redesenha o relógio e confere os avisos de prazo.
-    $.clock.every(30_000, () => {
-      $.ui.invalidate('ui.render')
-      void (async () => {
-        const p = await read($, plano)
-        const pr = await read($, prazo)
-        if (!p || !pr || p.concluido) return
-        const falta = pr.ate - (await $.clock.now())
-        const c = contar(p)
-        if (falta <= 0 && !pr.avisouVencido) {
-          await update($, prazo, v => (v ? { ...v, avisou5: true, avisouVencido: true } : v))
-          await notificar($, `O prazo das ${hora(pr.ate)} venceu. Faltam ${c.total - c.feitas} etapas.`)
-        } else if (falta > 0 && falta <= 5 * MIN && !pr.avisou5) {
-          await update($, prazo, v => (v ? { ...v, avisou5: true } : v))
-          await notificar($, `Faltam ${duracao(falta)} para o prazo (${hora(pr.ate)}).`)
-        }
-      })()
-    })
+    // A cada 30 segundos: redesenha o relógio.
+    $.clock.every(30_000, () => { $.ui.invalidate('ui.render') })
     return next(e)
   })
 
@@ -130,7 +100,7 @@ export const register: Register = on => {
       if (p && p.etapas.length && !p.concluido) {
         await update($, vez, () => 'voce' as Vez)
         await update($, plano, v => (v ? { ...v, fazendo: undefined } : v))
-        $.ui.toast('O Claude parou e espera sua resposta.', { timeoutMs: 6000 })
+        await notificar($, 'O Claude parou e espera sua resposta.')
       }
       const uso = await usoCincoHoras($)
       if (uso !== undefined) await update($, plano, v => (v ? { ...v, usoAgora: uso } : v))
@@ -241,7 +211,7 @@ export const register: Register = on => {
       await update($, plano, () => final)
       if (final.concluido && !antes?.concluido) {
         await update($, vez, () => 'claude' as Vez)
-        $.ui.toast(`Tarefa concluída em ${duracao(final.concluido - final.inicio)}.`, { timeoutMs: 8000 })
+        await notificar($, `Tarefa concluída em ${duracao(final.concluido - final.inicio)}.`)
       }
       if (novo && final.etapas.length >= 2 && !(await read($, fechadoPelaPessoa))) {
         void $.ui.open({ id: PAINEL, title: TITULO })
@@ -263,15 +233,6 @@ export const register: Register = on => {
     return { text: 'Painel do andamento aberto.' }
   })
 
-  on('command.run', { command: 'prazo' }, async ($, e) => {
-    if (!e.args.trim()) {
-      const p = await read($, prazo)
-      const agora = await $.clock.now()
-      return { text: p ? `Prazo marcado: ${hora(p.ate)} (faltam ${duracao(p.ate - agora)}). Para tirar: /prazo limpar.` : 'Nenhum prazo marcado. Exemplos: /prazo 30min, /prazo 1h30, /prazo 18:30.' }
-    }
-    return { text: await marcarPrazo($, e.args) }
-  })
-
   on('ui.close', async ($, e, next) => {
     if (e.id === PAINEL && e.origin.kind === 'person') await update($, fechadoPelaPessoa, () => true)
     return next(e)
@@ -283,7 +244,6 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PAINEL }, async ($, e) => {
     const { Box, Text, Button, Select } = $.ui.resolve(e)
     const p = await read($, plano)
-    const pr = await read($, prazo)
     const agora = await $.clock.now()
     const aVez = await read($, vez)
     const recolhido = await read($, compacto)
@@ -295,31 +255,19 @@ export const register: Register = on => {
         <Box flexDirection="column" gap={1} width={34}>
           <Text weight="semibold">Nenhuma tarefa em andamento</Text>
           <Text dimColor wrap="wrap">O andamento aparece aqui quando o Claude montar a lista de etapas de uma tarefa.</Text>
-          <Text dimColor wrap="wrap">{pr ? `Prazo marcado: ${hora(pr.ate)}.` : 'Para marcar um prazo: /prazo 30min ou /prazo 18:30.'}</Text>
         </Box>
       )
     }
 
-    const r = retrato(p, pr, agora, aVez)
+    const r = retrato(p, agora, aVez)
     const ativa = r.estado !== 'concluida'
     const podeParar = ativa && aVez === 'claude' && !!turnoAtual
 
-    // Controles: recolher ou expandir, parar o Claude e marcar o prazo com um clique.
+    // Controles: recolher ou expandir e parar o Claude.
     const controles = (
-      <Box flexDirection="column" gap={1}>
-        <Box flexDirection="row" gap={1}>
-          <Button key="tamanho" label={recolhido ? 'Expandir' : 'Recolher'} onPress={() => update($, compacto, v => !v)} />
-          {podeParar && <Button key="parar" label="Parar o Claude" onPress={async () => { await $.turn.abort({ turnId: turnoAtual }) }} />}
-        </Box>
-        {ativa && !recolhido && (
-          <Box flexDirection="row" gap={1}>
-            <Text dimColor>Prazo</Text>
-            <Button key="p30" label="30 min" plain onPress={async () => { await marcarPrazo($, '30min') }} />
-            <Button key="p60" label="1 h" plain onPress={async () => { await marcarPrazo($, '1h') }} />
-            <Button key="p120" label="2 h" plain onPress={async () => { await marcarPrazo($, '2h') }} />
-            {pr && <Button key="p0" label="Sem prazo" plain onPress={async () => { await marcarPrazo($, 'limpar') }} />}
-          </Box>
-        )}
+      <Box flexDirection="row" gap={1}>
+        <Button key="tamanho" label={recolhido ? 'Expandir' : 'Recolher'} onPress={() => update($, compacto, v => !v)} />
+        {podeParar && <Button key="parar" label="Parar o Claude" onPress={async () => { await $.turn.abort({ turnId: turnoAtual }) }} />}
       </Box>
     )
 
@@ -425,8 +373,8 @@ export const register: Register = on => {
     const p = await read($, plano)
     if (e.props.hasSurvey || !p || !p.etapas.length || p.concluido) return next(e)
     const { Box, Text, Button, Progress } = $.ui.resolve(e)
-    const r = retrato(p, await read($, prazo), await $.clock.now(), await read($, vez))
-    const tempo = r.estado === 'vencida' ? `prazo vencido há ${r.tempo.valor}` : `${r.tempo.valor} ${r.tempo.legenda}`
+    const r = retrato(p, await $.clock.now(), await read($, vez))
+    const tempo = `${r.tempo.valor} ${r.tempo.legenda}`
     const texto = r.estado === 'esperando' ? `${r.rotulo.toLowerCase()} · ${r.percentual}%` : `${r.percentual}% · etapa ${r.atual || r.total} de ${r.total} · ${tempo}`
     return (
       <Box flexDirection="row" gap={1} alignItems="center">
