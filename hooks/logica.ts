@@ -1,5 +1,5 @@
 // Contas do progresso: sem chamadas ao engine, para poder testar sozinhas.
-import type { Etapa, Plano, Situacao } from '../types'
+import type { Etapa, Plano, Situacao } from '../types/valores'
 
 const MIN = 60_000
 

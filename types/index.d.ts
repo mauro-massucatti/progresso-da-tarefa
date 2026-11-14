@@ -21,8 +21,8 @@ export type Plano = {
   usoInicio?: number   // percentual do limite de 5 horas quando a tarefa começou
   usoAgora?: number    // o mesmo percentual na última leitura
 }
-// De quem é a vez: o Claude trabalhando, o Claude esperando uma resposta sua ou a sua autorização.
-export type Vez = 'claude' | 'voce' | 'pergunta' | 'autorizacao'
+// De quem é a vez: o Claude trabalhando, o Claude esperando uma resposta sua.
+export type Vez = 'claude' | 'voce' | 'pergunta'
 
 declare module 'claude-code' {
   interface PluginState {

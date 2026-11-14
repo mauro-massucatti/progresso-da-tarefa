@@ -1,5 +1,5 @@
 // O que o Claude está fazendo, dito em palavras comuns, e o registro do que a tarefa produziu.
-import type { Arquivo, Plano } from '../types'
+import type { Arquivo, Plano } from '../types/valores'
 
 const base = (caminho: unknown): string => {
   const s = String(caminho ?? '')

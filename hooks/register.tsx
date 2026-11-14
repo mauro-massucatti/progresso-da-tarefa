@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Plano, Vez } from '../types'
+import type { Plano, Vez } from '../types/valores'
 import { avancar, concluirTudo, contar, corDaPizza, corDoAnel, duracao, hora, marcar, mosaico, situacaoDe, trocarEtapas } from './logica'
 import { COR, L, retrato, svgCompacto, svgDetalhe, svgEtapas, svgPainel, textoAlternativo } from './desenho'
 import type { Anterior } from './desenho'
@@ -22,8 +22,8 @@ const turno = atom({ plugin: 'progresso-da-tarefa', key: 'turno' } as const, '')
 // As listas de etapas que o Mod acompanha: a do app (abaixo das mensagens) e as do terminal.
 const FERRAMENTAS = ['mcp__ccd_turn__update_plan', 'mcp__ccd_turn__wrap_up', 'TodoWrite', 'TaskCreate', 'TaskUpdate'] as const
 
-type Args = Record<string, unknown>
-type Eng = EngineInterface
+type Args = Record<string, unknown>;
+type Eng = EngineInterface;
 const lista = (v: unknown): unknown[] => (Array.isArray(v) ? v : typeof v === 'string' ? jsonLista(v) : [])
 function jsonLista(s: string): unknown[] {
   try { const v = JSON.parse(s); return Array.isArray(v) ? v : [] } catch { return [] }
@@ -46,11 +46,9 @@ async function guardar($: Eng) {
   } catch { /* guardar é conveniência: falhar não pode atrapalhar a tarefa */ }
 }
 
-// Aviso do sistema (Central de Notificações do macOS), além do aviso dentro do app.
+// Aviso dentro do app.
 async function notificar($: Eng, texto: string) {
   $.ui.toast(texto, { timeoutMs: 8000 })
-  const limpo = texto.replace(/["\\]/g, '')
-  try { await $.process.run(['osascript', '-e', `display notification "${limpo}" with title "${TITULO}"`], { timeoutMs: 5000 }) } catch { /* sem aviso do sistema, fica o do app */ }
 }
 
 export const register: Register = on => {
@@ -109,13 +107,6 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // Pedido de autorização: a vez passa a ser da pessoa até a chamada seguir.
-  on('tool.check', async ($, e, next) => {
-    const r = await next(e)
-    if (r.decision === 'ask' && e.agentId === undefined) await update($, vez, () => 'autorizacao' as Vez)
-    return r
-  }).catch(($, e, next) => next(e))
-
   // Toda chamada: o que está sendo feito, na etapa atual, e o que ela produziu.
   on('tool.call', async ($, e, next) => {
     const a = e as unknown as Args
@@ -123,11 +114,9 @@ export const register: Register = on => {
     const frase = acaoEmPalavras(tool, a)
     const p0 = await read($, plano)
     const ativo = !!p0 && !p0.concluido && p0.etapas.length > 0
-    let existia = true
     const caminho = arquivoGravado(tool, a)
-    if (caminho) { try { existia = await $.fs.exists(caminho) } catch { existia = true } }
+    const existia = tool !== 'Write'
     if (tool === 'AskUserQuestion') await update($, vez, () => 'pergunta' as Vez)
-    else if ((await read($, vez)) === 'autorizacao') await update($, vez, () => 'claude' as Vez)
     if (ativo && frase) await update($, plano, v => (v ? { ...v, fazendo: frase } : v))
 
     const resultado = await next(e)
@@ -275,9 +264,7 @@ export const register: Register = on => {
       <Box flexDirection="column">
         <Text dimColor>ARQUIVOS {r.estado === 'concluida' ? 'ENTREGUES' : 'DA TAREFA'}</Text>
         {r.arquivos.slice(-6).reverse().map(a => (
-          <Button key={`abrir-${a.caminho}`} label={`${a.acao === 'criado' ? 'Novo' : 'Alterado'}: ${nomeDoArquivo(a.caminho)}`} plain onPress={async () => {
-            await $.process.run(['open', a.caminho], { timeoutMs: 10_000 })
-          }} />
+          <Text key={`arquivo-${a.caminho}`} wrap="truncate-end">{`${a.acao === 'criado' ? 'Novo' : 'Alterado'}: ${nomeDoArquivo(a.caminho)}`}</Text>
         ))}
       </Box>
     )

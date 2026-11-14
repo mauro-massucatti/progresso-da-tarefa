@@ -1,7 +1,7 @@
 // Retrato único do andamento e os desenhos do painel.
 // Tudo o que o painel, a faixa e o terminal mostram sai de `retrato()`: um só cálculo,
 // para que nenhum indicador fique atrás dos outros.
-import type { Arquivo, Etapa, Plano, Vez } from '../types'
+import type { Arquivo, Etapa, Plano, Vez } from '../types/valores'
 import { duracao, estimarRestante, hora } from './logica'
 
 const MIN = 60_000
@@ -54,7 +54,6 @@ export function curta(ms: number): string {
 const ESPERA: Record<Exclude<Vez, 'claude'>, [string, string]> = {
   voce: ['AGUARDANDO VOCÊ', 'O Claude parou e espera sua resposta na conversa.'],
   pergunta: ['PERGUNTA PARA VOCÊ', 'O Claude fez uma pergunta. Responda na conversa.'],
-  autorizacao: ['PEDE AUTORIZAÇÃO', 'O Claude espera sua autorização para seguir.'],
 }
 
 export function retrato(plano: Plano, agora: number, vez: Vez = 'claude'): Retrato {
