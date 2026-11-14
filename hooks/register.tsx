@@ -337,7 +337,7 @@ export const register: Register = on => {
     const comAcoes = r.etapas.map((x, i) => ({ ...x, n: i + 1 })).filter(x => x.situacao !== 'falta')
     const seletor = !recolhido && comAcoes.length > 0 && (
       // Texto em cima e seletor embaixo, os dois dentro da largura da coluna dos desenhos.
-      <Box flexDirection="column" gap={0}>
+      <Box flexDirection="column" gap={0} alignSelf="flex-start" alignItems="stretch">
         <Text dimColor wrap="wrap">Ver o que foi feito numa etapa</Text>
         <Select key="etapa" value={String(aberta)}
           options={[{ value: '0', label: 'Escolha uma etapa' }, ...comAcoes.map(x => ({ value: String(x.n), label: `${x.n}. ${x.nome.length > 22 ? x.nome.slice(0, 21).trimEnd() + '…' : x.nome}` }))]}
@@ -352,7 +352,6 @@ export const register: Register = on => {
       const marca = (s: string) => (s === 'feita' ? '✓' : s === 'agora' ? '●' : '○')
       return (
         <Box flexDirection="column" gap={1} width={30}>
-          {controles}
           <Box flexDirection="column">
             <Text weight="semibold" color={r.cor}>● {r.rotulo}</Text>
             {(r.aviso ?? r.agora) && <Text wrap="wrap">{r.aviso ?? r.agora}</Text>}
@@ -388,6 +387,7 @@ export const register: Register = on => {
             </Box>
           )}
           {arquivos}
+          {controles}
         </Box>
       )
     }
@@ -399,8 +399,8 @@ export const register: Register = on => {
       anteriores.set(chave, d.agora)
       return (
         <Box flexDirection="column" gap={1}>
-          {controles}
           <Svg source={d.svg} alt={textoAlternativo(r)} width={L + 4} height={d.altura} isInteractive />
+          {controles}
         </Box>
       )
     }
@@ -410,12 +410,12 @@ export const register: Register = on => {
     const det = aberta ? svgDetalhe(r, aberta) : null
     return (
       <Box flexDirection="column" gap={1}>
-        {controles}
         <Svg source={d.svg} alt={textoAlternativo(r)} width={L + 4} height={d.altura} isInteractive />
         <Svg source={et.svg} alt={`Etapas: ${r.etapas.map((x, i) => `${i + 1}. ${x.nome} (${x.situacao === 'feita' ? 'concluída' : x.situacao === 'agora' ? 'em andamento' : 'pendente'})`).join('; ')}`} width={L + 4} height={et.altura} isInteractive />
         {seletor}
         {det && <Svg source={det.svg} alt="O que foi feito na etapa escolhida" width={L + 4} height={det.altura} isInteractive />}
         {arquivos}
+        {controles}
       </Box>
     )
   })
