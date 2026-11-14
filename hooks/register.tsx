@@ -336,9 +336,13 @@ export const register: Register = on => {
 
     const comAcoes = r.etapas.map((x, i) => ({ ...x, n: i + 1 })).filter(x => x.situacao !== 'falta')
     const seletor = !recolhido && comAcoes.length > 0 && (
-      <Select key="etapa" label="Ver o que foi feito numa etapa" value={String(aberta)}
-        options={[{ value: '0', label: 'Escolha uma etapa' }, ...comAcoes.map(x => ({ value: String(x.n), label: `${x.n}. ${x.nome.length > 32 ? x.nome.slice(0, 31) + '…' : x.nome}` }))]}
-        onSelect={v => { void update($, etapaAberta, () => Number(v) || 0) }} />
+      // Texto em cima e seletor embaixo, os dois dentro da largura da coluna dos desenhos.
+      <Box flexDirection="column" gap={0}>
+        <Text dimColor wrap="wrap">Ver o que foi feito numa etapa</Text>
+        <Select key="etapa" value={String(aberta)}
+          options={[{ value: '0', label: 'Escolha uma etapa' }, ...comAcoes.map(x => ({ value: String(x.n), label: `${x.n}. ${x.nome.length > 22 ? x.nome.slice(0, 21).trimEnd() + '…' : x.nome}` }))]}
+          onSelect={v => { void update($, etapaAberta, () => Number(v) || 0) }} />
+      </Box>
     )
 
     if (e.surface === 'terminal') {
