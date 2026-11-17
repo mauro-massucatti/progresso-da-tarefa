@@ -23,3 +23,7 @@ export type Plano = {
 }
 // De quem é a vez: o Claude trabalhando, o Claude esperando uma resposta sua.
 export type Vez = 'claude' | 'voce' | 'pergunta'
+
+// Uso do plano: a janela de 5 horas (a "sessão atual" do Claude) e a semanal, com o gasto da conversa.
+export type Janela = { pct: number; renova?: string }
+export type Limites = { sessao?: Janela; semana?: Janela; custo?: number; lido: number }

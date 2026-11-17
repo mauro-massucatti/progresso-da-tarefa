@@ -21,6 +21,7 @@ Uma coluna estreita (cerca de 200 px), lida de cima para baixo, desenhada com a 
 6. **Faixa acima da caixa de texto**: uma linha com o percentual, a etapa e o tempo, e o botão "Ver painel"; quando a vez é sua, ela avisa.
 7. **Arquivos entregues**: cada arquivo criado ou alterado na tarefa, com botão para abrir.
 8. **Resumo ao concluir**: horário de início e fim, etapas, arquivos, ações com erro e quanto do limite de 5 horas a tarefa usou.
+9. **Uso do plano**: dois anéis com o percentual já usado da sessão atual (limite de 5 horas) e da semana, quando cada um renova e o gasto da conversa, atualizados sempre que mudam.
 
 ## Botões no painel
 
@@ -50,7 +51,7 @@ Da lista de etapas que o Claude mantém na sessão: a do app (abaixo das mensage
 
 1. **Ganchos nas chamadas de ferramenta (`tool.call`).** O Mod observa toda chamada de ferramenta da sessão, inclusive as de servidores MCP e de comandos do terminal, só para ler o nome da ferramenta e o caminho do arquivo gravado, e com isso escrever em português o que está sendo feito ("Consultando o STJ", "Escrevendo Parecer.docx") e listar os arquivos da tarefa. Ele repassa cada chamada sem alterá-la, sem bloqueá-la e sem responder no lugar da ferramenta. Nas cinco ferramentas da lista de etapas (`mcp__ccd_turn__update_plan`, `mcp__ccd_turn__wrap_up`, `TodoWrite`, `TaskCreate`, `TaskUpdate`) ele lê as etapas e a situação de cada uma.
 2. **Pedido e turnos (`prompt.submit`, `turn.start`, `turn.complete`).** Guarda o texto do seu último pedido para dar nome à tarefa e percebe quando o Claude parou esperando você. Não altera o pedido.
-3. **Limite de uso.** Lê o percentual já usado do limite de 5 horas da sua conta, que o próprio Claude Code informa, para mostrar quanto a tarefa consumiu. Não lê nem usa senha, chave ou token.
+3. **Limites de uso.** Lê o percentual já usado dos limites de 5 horas e semanal da sua conta, a data de renovação de cada um e o gasto da conversa, que o próprio Claude Code informa, para mostrar quanto a tarefa e a semana consumiram. Não lê nem usa senha, chave ou token.
 4. **Memória.** Guarda o andamento de cada sessão no armazenamento do próprio Mod no Claude Code, por até 14 dias, e apaga o que for mais antigo.
 5. **O que ele não faz.** Não acessa a rede, não envia dados a lugar nenhum, não executa programas, não chama ferramentas por conta própria e não decide permissões: tudo o que ele lê fica no painel, no seu computador. O botão "Parar o Claude" só interrompe o turno em curso quando você o aperta.
 

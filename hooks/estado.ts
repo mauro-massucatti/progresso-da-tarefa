@@ -1,6 +1,6 @@
 // Estado do Mod, em variáveis do próprio arquivo: os ganchos leem e escrevem aqui,
 // e cada mudança (mudar, em register.tsx) pede ao Claude Code para redesenhar o painel e a faixa.
-import type { Plano, Vez } from '../types/valores'
+import type { Limites, Plano, Vez } from '../types/valores'
 
 export const est = {
   plano: null as Plano | null,
@@ -10,6 +10,7 @@ export const est = {
   compacto: false,
   etapaAberta: 0,
   turno: '',
+  limites: null as Limites | null,
 }
 export type Estado = typeof est
 

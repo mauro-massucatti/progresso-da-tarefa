@@ -374,3 +374,88 @@ export function textoAlternativo(r: Retrato): string {
     + `${r.emCurso} em andamento, ${r.pendentes} pendentes. Tempo: ${r.tempo.valor} ${r.tempo.legenda}. ${r.tempo.linhas.join('. ')}.`
     + (r.aviso ? ` ${r.aviso}` : '') + (r.agora ? ` Agora: ${r.agora}.` : '')
 }
+
+// Uso do plano: dois anéis, a "sessão atual" (janela de 5 horas) e a semana, com quando cada uma renova.
+const DIAS = ['dom.', 'seg.', 'ter.', 'qua.', 'qui.', 'sex.', 'sáb.']
+export const corDoUso = (pct: number): string => (pct >= 90 ? COR.erro : pct >= 70 ? COR.espera : COR.feita)
+
+export function renovaEm(iso: string | undefined, agora: number, semanal: boolean): string {
+  if (!iso) return 'renovação sem data'
+  const ms = Date.parse(iso)
+  if (!Number.isFinite(ms)) return 'renovação sem data'
+  if (ms <= agora) return 'renovando agora'
+  if (!semanal || ms - agora < 20 * 60 * MIN) {
+    const falta = curta(ms - agora)
+    return `renova em ${falta}`
+  }
+  return `renova ${DIAS[new Date(ms).getDay()]} ${hora(ms)}`
+}
+
+export type UsoAnterior = { sessao: number; semana: number }
+export type UsoVisto = { sessao?: { pct: number; renova?: string }; semana?: { pct: number; renova?: string }; custo?: number }
+
+const usd = (v: number) => `US$ ${v.toFixed(2).replace('.', ',')}`
+
+export function textoUso(u: UsoVisto, agora: number): string {
+  const partes: string[] = []
+  if (u.sessao) partes.push(`Sessão atual: ${Math.round(u.sessao.pct)}% usado, ${renovaEm(u.sessao.renova, agora, false)}`)
+  if (u.semana) partes.push(`Semana: ${Math.round(u.semana.pct)}% usado, ${renovaEm(u.semana.renova, agora, true)}`)
+  if (u.custo !== undefined) partes.push(`Esta conversa: ${usd(u.custo)}`)
+  return partes.length ? `Uso do plano. ${partes.join('. ')}.` : 'Uso do plano ainda sem leitura.'
+}
+
+export function svgUso(u: UsoVisto, agora: number, antes: UsoAnterior | null, pequeno = false): { svg: string; altura: number; agora: UsoAnterior } {
+  const partes: string[] = []
+  let y = 0
+  partes.push(`<text x="0" y="${y + 10}" class="cap">USO DO PLANO</text>`)
+  y += 22
+  const janelas: [string, { pct: number; renova?: string } | undefined, boolean, number | null][] = [
+    ['Sessão atual', u.sessao, false, antes?.sessao ?? null],
+    ['Semana', u.semana, true, antes?.semana ?? null],
+  ]
+  if (!u.sessao && !u.semana) {
+    for (const l of quebrar('Os limites aparecem depois da primeira resposta do Claude nesta conversa.', 31)) {
+      partes.push(`<text x="0" y="${y + 10}" class="t3 p">${esc(l)}</text>`); y += 17
+    }
+  } else if (pequeno) {
+    // Recolhido: duas barras curtas, uma por janela.
+    for (const [nome, j, semanal, de] of janelas) {
+      if (!j) continue
+      const pct = Math.min(100, Math.max(0, j.pct))
+      partes.push(`<text x="0" y="${y + 10}" class="t2 p">${nome}</text>`)
+      partes.push(`<text x="${L}" y="${y + 10}" text-anchor="end" class="t1 p num2">${Math.round(j.pct)}%</text>`)
+      y += 16
+      const w = (pct / 100) * L
+      partes.push(`<rect x="0" y="${y}" width="${L}" height="${TRACO}" rx="${TRACO / 2}" class="trilho"/>`)
+      if (w > 0) partes.push(`<rect x="0" y="${y}" width="${w.toFixed(1)}" height="${TRACO}" rx="${TRACO / 2}" style="fill:${corDoUso(j.pct)}">${anima('width', de === null ? '0' : ((Math.min(100, de) / 100) * L).toFixed(1), w.toFixed(1))}</rect>`)
+      y += TRACO + 6
+      partes.push(`<text x="0" y="${y + 9}" class="t3 pp">${esc(renovaEm(j.renova, agora, semanal))}</text>`)
+      y += 20
+    }
+  } else {
+    // Dois anéis lado a lado, cada um com a sua legenda e a renovação embaixo.
+    const d = 88
+    const gap = L - 2 * d
+    janelas.forEach(([nome, j, semanal, de], i) => {
+      const cx = d / 2 + i * (d + gap)
+      if (!j) {
+        partes.push(`<circle cx="${cx}" cy="${y + d / 2}" r="${(d - TRACO) / 2}" fill="none" class="trilhoS" stroke-width="${TRACO}"/>`)
+        partes.push(`<text x="${cx}" y="${y + d / 2 + 4}" text-anchor="middle" class="t3 pp">sem leitura</text>`)
+      } else {
+        anel(partes, cx, y + d / 2, d, j.pct / 100, corDoUso(j.pct), `${Math.round(j.pct)}%`, 'usado', de === null ? null : de / 100)
+      }
+      partes.push(`<text x="${cx}" y="${y + d + 16}" text-anchor="middle" class="t1 p forte">${nome}</text>`)
+      partes.push(`<text x="${cx}" y="${y + d + 32}" text-anchor="middle" class="t3 pp">${esc(j ? renovaEm(j.renova, agora, semanal) : '')}</text>`)
+    })
+    y += d + 42
+  }
+  if (u.custo !== undefined) {
+    partes.push(`<text x="0" y="${y + 10}" class="t3 p">Esta conversa</text>`)
+    partes.push(`<text x="${L}" y="${y + 10}" text-anchor="end" class="t1 p num2">${usd(u.custo)}</text>`)
+    y += 20
+  }
+  const altura = Math.ceil(y + 4)
+  return { svg: envolver(partes.join(''), altura), altura, agora: { sessao: u.sessao?.pct ?? 0, semana: u.semana?.pct ?? 0 } }
+}
+
+export const novosUsos = () => new Map<string, UsoAnterior>()

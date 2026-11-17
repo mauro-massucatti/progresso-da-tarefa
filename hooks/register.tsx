@@ -1,8 +1,9 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Plano, Vez } from '../types/valores'
+import type { Limites, Plano, Vez } from '../types/valores'
 import { avancar, concluirTudo, contar, corDaPizza, corDoAnel, duracao, hora, marcar, mosaico, situacaoDe, trocarEtapas } from './logica'
-import { COR, L, novosAnteriores, retrato, svgCompacto, svgDetalhe, svgEtapas, svgPainel, textoAlternativo } from './desenho'
+import { COR, L, corDoUso, novosAnteriores, novosUsos, renovaEm, retrato, svgUso, textoUso, svgCompacto, svgDetalhe, svgEtapas, svgPainel, textoAlternativo } from './desenho'
+import type { UsoVisto } from './desenho'
 import { est } from './estado'
 import type { Estado } from './estado'
 import { acaoEmPalavras, arquivoGravado, nomeDoArquivo, registrar } from './acoes'
@@ -50,6 +51,23 @@ async function notificar($: Eng, texto: string) {
   $.ui.toast(texto, { timeoutMs: 8000 })
 }
 
+// Lê os limites do plano (5 horas e semana) e o gasto da conversa; só grava se algo mudou,
+// para não redesenhar o painel à toa.
+type Medida = { rateLimits: { kind: string; percentUsed: number; resetsAt?: string }[]; cost?: { usd: number } }
+function janelaDe(m: Medida, rx: RegExp) {
+  const x = m.rateLimits.find(r => rx.test(r.kind))
+  return x ? { pct: x.percentUsed, renova: x.resetsAt } : undefined
+}
+async function anotarLimites($: Eng, m: Medida) {
+  const novo: Limites = { sessao: janelaDe(m, /five|5_?h/), semana: janelaDe(m, /seven|7_?d|week/), custo: m.cost ? Math.round(m.cost.usd * 100) / 100 : undefined, lido: await $.clock.now() }
+  const antes = est.limites
+  const igual = !!antes && JSON.stringify({ ...antes, lido: 0 }) === JSON.stringify({ ...novo, lido: 0 })
+  if (!igual) mudar($, 'limites', () => novo)
+}
+async function lerLimites($: Eng) {
+  try { await anotarLimites($, await $.session.usage()) } catch { /* sem leitura, fica a anterior */ }
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'progresso', description: 'Abre ou fecha o painel com o andamento da tarefa' })
@@ -70,9 +88,16 @@ export const register: Register = on => {
     } catch { /* sem memória guardada, começa vazio */ }
 
     // A cada 30 segundos: redesenha o relógio.
+    await lerLimites($)
     $.clock.every(30_000, () => { $.ui.invalidate('ui.render') })
     return next(e)
   })
+
+  // Limites em tempo real: o motor avisa quando uma janela anda um ponto ou o gasto cresce.
+  on('session.measure', async ($, e, next) => {
+    if (e.changed.includes('rateLimits') || e.changed.includes('cost')) await anotarLimites($, e)
+    return next(e)
+  }).catch(($, e, next) => next(e))
 
   on('prompt.submit', async ($, e, next) => {
     const texto = typeof e.text === 'string' ? e.text : ''
@@ -116,7 +141,7 @@ export const register: Register = on => {
     const caminho = arquivoGravado(tool, a)
     const existia = tool !== 'Write'
     if (tool === 'AskUserQuestion') await mudar($, 'vez', () => 'pergunta' as Vez)
-    if (ativo && frase) await mudar($, 'plano', v => (v ? { ...v, fazendo: frase } : v))
+    if (ativo && frase && p0?.fazendo !== frase) await mudar($, 'plano', v => (v ? { ...v, fazendo: frase } : v))
 
     const resultado = await next(e)
 
@@ -228,6 +253,7 @@ export const register: Register = on => {
 
   // Último desenho de cada superfície: a próxima versão anima a partir dele.
   const anteriores = novosAnteriores()
+  const usosAnteriores = novosUsos()
 
   on('ui.render', { component: 'Pane', requestId: PAINEL }, async ($, e) => {
     const { Box, Text, Button, Select } = $.ui.resolve(e)
@@ -237,12 +263,42 @@ export const register: Register = on => {
     const recolhido = est.compacto
     const aberta = est.etapaAberta
     const turnoAtual = est.turno
+    const lim: UsoVisto = est.limites ?? {}
+    const recolhido0 = recolhido && !!p && p.etapas.length > 0
+
+    // Uso do plano: anéis no app, barras no terminal.
+    let uso: JSX.Element
+    if (e.surface === 'terminal') {
+      const { Progress } = $.ui.resolve(e)
+      const linha = (nome: string, j: { pct: number; renova?: string } | undefined, semanal: boolean) => j && (
+        <Box flexDirection="column">
+          <Text>{nome} <Text weight="semibold" color={corDoUso(j.pct)}>{Math.round(j.pct)}%</Text> <Text dimColor>· {renovaEm(j.renova, agora, semanal)}</Text></Text>
+          <Progress label={`${nome}: uso do limite`} value={Math.min(100, j.pct)} max={100} valueText={`${Math.round(j.pct)}%`} color={corDoUso(j.pct)} />
+        </Box>
+      )
+      uso = (
+        <Box flexDirection="column">
+          <Text dimColor>USO DO PLANO</Text>
+          {!lim.sessao && !lim.semana && <Text dimColor wrap="wrap">Os limites aparecem depois da primeira resposta.</Text>}
+          {linha('Sessão atual', lim.sessao, false)}
+          {linha('Semana', lim.semana, true)}
+          {lim.custo !== undefined && <Text dimColor>Esta conversa: US$ {lim.custo.toFixed(2).replace('.', ',')}</Text>}
+        </Box>
+      )
+    } else {
+      const { Svg } = $.ui.resolve(e)
+      const chaveUso = `${e.surface}:${recolhido0 ? 'c' : 'p'}`
+      const u = svgUso(lim, agora, usosAnteriores.get(chaveUso) ?? null, recolhido0)
+      usosAnteriores.set(chaveUso, u.agora)
+      uso = <Svg source={u.svg} alt={textoUso(lim, agora)} width={L + 4} height={u.altura} />
+    }
 
     if (!p || !p.etapas.length) {
       return (
         <Box flexDirection="column" gap={1} width={34}>
           <Text weight="semibold">Nenhuma tarefa em andamento</Text>
           <Text dimColor wrap="wrap">O andamento aparece aqui quando o Claude montar a lista de etapas de uma tarefa.</Text>
+          {uso}
         </Box>
       )
     }
@@ -320,6 +376,7 @@ export const register: Register = on => {
               ))}
             </Box>
           )}
+          {uso}
           {arquivos}
           {controles}
         </Box>
@@ -333,7 +390,8 @@ export const register: Register = on => {
       anteriores.set(chave, d.agora)
       return (
         <Box flexDirection="column" gap={1}>
-          <Svg source={d.svg} alt={textoAlternativo(r)} width={L + 4} height={d.altura} isInteractive />
+          <Svg source={d.svg} alt={textoAlternativo(r)} width={L + 4} height={d.altura} />
+          {uso}
           {controles}
         </Box>
       )
@@ -344,10 +402,11 @@ export const register: Register = on => {
     const det = aberta ? svgDetalhe(r, aberta) : null
     return (
       <Box flexDirection="column" gap={1}>
-        <Svg source={d.svg} alt={textoAlternativo(r)} width={L + 4} height={d.altura} isInteractive />
-        <Svg source={et.svg} alt={`Etapas: ${r.etapas.map((x, i) => `${i + 1}. ${x.nome} (${x.situacao === 'feita' ? 'concluída' : x.situacao === 'agora' ? 'em andamento' : 'pendente'})`).join('; ')}`} width={L + 4} height={et.altura} isInteractive />
+        <Svg source={d.svg} alt={textoAlternativo(r)} width={L + 4} height={d.altura} />
+        <Svg source={et.svg} alt={`Etapas: ${r.etapas.map((x, i) => `${i + 1}. ${x.nome} (${x.situacao === 'feita' ? 'concluída' : x.situacao === 'agora' ? 'em andamento' : 'pendente'})`).join('; ')}`} width={L + 4} height={et.altura} />
         {seletor}
-        {det && <Svg source={det.svg} alt="O que foi feito na etapa escolhida" width={L + 4} height={det.altura} isInteractive />}
+        {det && <Svg source={det.svg} alt="O que foi feito na etapa escolhida" width={L + 4} height={det.altura} />}
+        {uso}
         {arquivos}
         {controles}
       </Box>
