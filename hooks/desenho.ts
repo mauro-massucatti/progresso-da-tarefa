@@ -79,7 +79,7 @@ export function retrato(plano: Plano, agora: number, vez: Vez = 'claude'): Retra
 
   if (plano.concluido || (total > 0 && feitas === total)) {
     const fim = plano.concluido ?? agora
-    const linhas = [`Das ${hora(plano.inicio)} às ${hora(fim)}`, `${total} etapa${total > 1 ? 's' : ''} concluída${total > 1 ? 's' : ''}`]
+    const linhas = [`${hora(plano.inicio)} às ${hora(fim)}`, `${total} etapa${total > 1 ? 's' : ''} concluída${total > 1 ? 's' : ''}`]
     if (base.arquivos.length) linhas.push(`${base.arquivos.length} arquivo${base.arquivos.length > 1 ? 's' : ''} entregue${base.arquivos.length > 1 ? 's' : ''}`)
     if (base.erros) linhas.push(base.erros > 1 ? `${base.erros} ações com erro, refeitas` : '1 ação com erro, refeita')
     if (uso) linhas.push(`Usou ${uso}% do limite de 5 h`)
@@ -122,7 +122,12 @@ export function retrato(plano: Plano, agora: number, vez: Vez = 'claude'): Retra
 // Medidas: uma largura de coluna e um traço para barra e anel.
 export const L = 200
 const TRACO = 7
-const DIAM = 112
+const DIAM = 88
+// Duas colunas iguais: pizza e tempo, sessão e semana, sempre no mesmo lugar e no mesmo tamanho.
+const VAO = 16
+const COL = (L - VAO) / 2
+const CENTROS = [COL / 2, COL + VAO + COL / 2] as const
+const MARGEM = 6
 const FONTE = `-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif`
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const anima = (attr: string, de: string, para: string) =>
@@ -134,15 +139,16 @@ svg{--t1:#141413;--t2:#3D3D3A;--t3:#87867F;--trilho:#E8E6DC;--pend:#B0AEA5;--fun
 @media (prefers-color-scheme: dark){svg{--t1:#FAF9F5;--t2:#D1CFC5;--t3:#9C9A92;--trilho:#3D3D3A;--pend:#6E6C66;--fundo:#262624}}
 text{font-family:${FONTE};font-variant-numeric:tabular-nums}
 .t1{fill:var(--t1)}.t2{fill:var(--t2)}.t3{fill:var(--t3)}
-.cap{font-size:10.5px;letter-spacing:.09em;fill:var(--t3);font-weight:600}
-.forte{font-weight:600}.p{font-size:12.5px}.pp{font-size:11px}
-.num{font-size:30px;font-weight:600;letter-spacing:-.02em}.pct{font-size:17px;font-weight:500;fill:var(--t3)}
+.cap{font-size:11px;letter-spacing:.09em;fill:var(--t3);font-weight:600}
+.forte{font-weight:600}.p{font-size:13.5px}.pp{font-size:12px}
+.num{font-size:32px;font-weight:600;letter-spacing:-.02em}.pct{font-size:17px;font-weight:500;fill:var(--t3)}
 .num2{font-weight:600}.valor{font-weight:600;letter-spacing:-.01em;fill:var(--t1)}
 .trilho{fill:var(--trilho)}.trilhoS{stroke:var(--trilho)}.fio{stroke:var(--pend)}
 .contorno{stroke:var(--fundo);stroke-width:2.5px}
 </style>`
 const envolver = (corpo: string, altura: number) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${L + 4}" height="${altura}" viewBox="-2 0 ${L + 4} ${altura}">${ESTILO}${corpo}</svg>`
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${LARG}" height="${altura}" viewBox="-${MARGEM} 0 ${LARG} ${altura}">${ESTILO}${corpo}</svg>`
+export const LARG = L + 2 * MARGEM
 
 export function quebrar(texto: string, porLinha: number, maxLinhas = 2): string[] {
   const palavras = texto.split(/\s+/).filter(Boolean)
@@ -165,25 +171,25 @@ function blocoEstado(r: Retrato, partes: string[], y0: number): number {
   let y = y0
   partes.push(`<circle cx="4" cy="${y + 7}" r="4" style="fill:${r.cor}"/>`)
   partes.push(`<text x="14" y="${y + 11}" class="cap forte" style="fill:${r.cor}">${esc(r.rotulo)}</text>`)
-  const longo = r.rotulo.length > 12
+  const longo = r.rotulo.length > 9
   const posicao = r.estado === 'concluida' ? `${r.total} de ${r.total}` : r.atual ? (longo ? `${r.atual} de ${r.total}` : `Etapa ${r.atual} de ${r.total}`) : `${r.total} etapas`
   partes.push(`<text x="${L}" y="${y + 11}" text-anchor="end" class="t3 p">${esc(posicao)}</text>`)
   y += 20
   const detalhe = r.aviso ?? r.agora ?? null
   if (detalhe) {
-    for (const l of quebrar(detalhe, 31)) {
+    for (const l of quebrar(detalhe, 28)) {
       partes.push(`<text x="0" y="${y + 10}" class="${r.aviso ? 't1 forte' : 't2'} p">${esc(l)}</text>`)
-      y += 17
+      y += 18
     }
   }
   if (r.naEtapa && !r.aviso) {
     partes.push(`<text x="0" y="${y + 10}" class="t3 p">${esc(r.naEtapa)}</text>`)
-    y += 17
+    y += 18
   }
   if (r.erros && r.estado !== 'concluida') {
-    for (const l of quebrar(r.erros > 1 ? `${r.erros} ações deram erro e foram refeitas` : '1 ação deu erro e foi refeita', 31)) {
+    for (const l of quebrar(r.erros > 1 ? `${r.erros} ações deram erro e foram refeitas` : '1 ação deu erro e foi refeita', 28)) {
       partes.push(`<text x="0" y="${y + 10}" class="p" style="fill:${COR.erro}">${esc(l)}</text>`)
-      y += 17
+      y += 18
     }
   }
   return y + 12
@@ -229,10 +235,16 @@ export function svgPainel(r: Retrato, antes: Anterior | null): { svg: string; al
   y = blocoPercentual(r, partes, y, antes)
   const titulo = (texto: string) => { partes.push(`<text x="0" y="${y + 10}" class="cap">${esc(texto)}</text>`); y += 22 }
 
-  titulo('DISTRIBUIÇÃO DAS ETAPAS')
-  const cx = DIAM / 2, cy = y + DIAM / 2, raio = DIAM / 2
+  // Pizza e tempo lado a lado, cada um na sua coluna, com o mesmo diâmetro.
+  const [ca, cb] = CENTROS
+  const xa = 0, xb = COL + VAO
+  partes.push(`<text x="${xa}" y="${y + 10}" class="cap">DISTRIBUIÇÃO</text>`)
+  partes.push(`<text x="${xb}" y="${y + 10}" class="cap">${r.estado === 'concluida' ? 'RESUMO' : 'TEMPO'}</text>`)
+  y += 22
+  const topo = y
+  const cx = ca, cy = y + DIAM / 2, raio = DIAM / 2
   const fatias: [number, string, string][] = [
-    [r.feitas, COR.feita, 'Concluídas'], [r.emCurso, r.estado === 'esperando' ? COR.espera : COR.agora, 'Em andamento'], [r.pendentes, 'var(--pend)', 'Pendentes'],
+    [r.feitas, COR.feita, 'Concluídas'], [r.emCurso, r.estado === 'esperando' ? COR.espera : COR.agora, 'Em curso'], [r.pendentes, 'var(--pend)', 'Pendentes'],
   ]
   const presentes = fatias.filter(f => f[0] > 0)
   if (!r.total) partes.push(`<circle cx="${cx}" cy="${cy}" r="${raio}" class="trilho"/>`)
@@ -255,24 +267,25 @@ export function svgPainel(r: Retrato, antes: Anterior | null): { svg: string; al
       a = b
     }
   }
-  y += DIAM + 14
-  for (const [n, cor, nome] of fatias) {
-    partes.push(`<circle cx="4" cy="${y + 5}" r="4" style="fill:${cor}"/>`)
-    partes.push(`<text x="14" y="${y + 9}" class="t2 p">${nome}</text>`)
-    partes.push(`<text x="${L}" y="${y + 9}" text-anchor="end" class="t1 p num2">${n}</text>`)
-    y += 19
-  }
-  y += 18
+  anel(partes, cb, cy, DIAM, r.tempo.fracao, r.tempo.cor, r.tempo.valor, r.tempo.legenda, antes?.anel ?? null)
 
-  titulo(r.estado === 'concluida' ? 'RESUMO' : 'TEMPO')
-  anel(partes, DIAM / 2, y + DIAM / 2, DIAM, r.tempo.fracao, r.tempo.cor, r.tempo.valor, r.tempo.legenda, antes?.anel ?? null)
-  y += DIAM + 14
+  // Embaixo de cada desenho, o seu texto, na mesma altura nas duas colunas.
+  let ya = topo + DIAM + 16
+  for (const [n, cor, nome] of fatias) {
+    partes.push(`<circle cx="${xa + 4}" cy="${ya + 5}" r="4" style="fill:${cor}"/>`)
+    partes.push(`<text x="${xa + 13}" y="${ya + 9}" class="t2 pp">${nome}</text>`)
+    partes.push(`<text x="${xa + COL}" y="${ya + 9}" text-anchor="end" class="t1 pp num2">${n}</text>`)
+    ya += 18
+  }
+  let yb = topo + DIAM + 16
   r.tempo.linhas.forEach((linha, i) => {
-    for (const parte of quebrar(linha, 31)) {
-      partes.push(`<text x="0" y="${y + 9}" class="${i === 0 ? 't1' : 't3'} p">${esc(parte)}</text>`)
-      y += 17
+    for (const parte of quebrar(linha, 17, 3)) {
+      partes.push(`<text x="${cb}" y="${yb + 9}" text-anchor="middle" class="${i === 0 ? 't1' : 't3'} pp">${esc(parte)}</text>`)
+      yb += 16
     }
+    yb += 3
   })
+  y = Math.max(ya, yb)
   y += 6
   const altura = Math.ceil(y)
   return { svg: envolver(partes.join(''), altura), altura, agora: { barra: r.total ? r.feitas / r.total : 0, anel: r.tempo.fracao } }
@@ -296,12 +309,12 @@ export function svgEtapas(r: Retrato): { svg: string; altura: number } {
   }
   for (const e of lista.slice(0, 8)) {
     const reserva = e.duracao ? 6 : 0
-    const linhas = quebrar(e.nome, 27 - reserva)
+    const linhas = quebrar(e.nome, 25 - reserva, 3)
     marcas.push({ y: y + 6, situacao: e.situacao })
     const classe = e.situacao === 'agora' ? 't1 p forte' : e.situacao === 'feita' ? 't3 p' : 't2 p'
-    linhas.forEach((l, i) => partes.push(`<text x="20" y="${y + 10 + i * 16}" class="${classe}">${esc(l)}</text>`))
+    linhas.forEach((l, i) => partes.push(`<text x="20" y="${y + 10 + i * 17}" class="${classe}">${esc(l)}</text>`))
     if (e.duracao) partes.push(`<text x="${L}" y="${y + 10}" text-anchor="end" class="t3 pp">${esc(e.duracao)}</text>`)
-    y += 8 + linhas.length * 16
+    y += 8 + linhas.length * 17
   }
   if (lista.length > 8) { partes.push(`<text x="20" y="${y + 10}" class="t3 p">e mais ${lista.length - 8}</text>`); y += 20 }
   const corAgora = r.estado === 'esperando' ? COR.espera : COR.agora
@@ -330,13 +343,13 @@ export function svgDetalhe(r: Retrato, n: number): { svg: string; altura: number
   const partes: string[] = []
   let y = 0
   const situacao = e.situacao === 'feita' ? `Concluída${e.duracao ? ` em ${e.duracao}` : ''}` : e.situacao === 'agora' ? 'Em andamento' : 'Ainda não começou'
-  for (const l of quebrar(e.nome, 31)) { partes.push(`<text x="0" y="${y + 10}" class="t1 p forte">${esc(l)}</text>`); y += 17 }
+  for (const l of quebrar(e.nome, 28)) { partes.push(`<text x="0" y="${y + 10}" class="t1 p forte">${esc(l)}</text>`); y += 18 }
   partes.push(`<text x="0" y="${y + 10}" class="t3 p">${esc(situacao)}</text>`)
   y += 22
-  if (!e.acoes.length) { partes.push(`<text x="0" y="${y + 10}" class="t3 p">Nenhuma ação registrada.</text>`); y += 17 }
+  if (!e.acoes.length) { partes.push(`<text x="0" y="${y + 10}" class="t3 p">Nenhuma ação registrada.</text>`); y += 18 }
   for (const a of e.acoes.slice(-8)) {
     partes.push(`<circle cx="3" cy="${y + 6}" r="1.8" class="t3"/>`)
-    for (const l of quebrar(a, 29)) { partes.push(`<text x="12" y="${y + 10}" class="t2 p">${esc(l)}</text>`); y += 17 }
+    for (const l of quebrar(a, 26)) { partes.push(`<text x="12" y="${y + 10}" class="t2 p">${esc(l)}</text>`); y += 18 }
   }
   const altura = Math.ceil(y + 6)
   return { svg: envolver(partes.join(''), altura), altura }
@@ -363,7 +376,7 @@ export function svgCompacto(r: Retrato, antes: Anterior | null): { svg: string; 
   if (atual) {
     partes.push(`<text x="0" y="${y + 10}" class="cap">ETAPA ATUAL</text>`)
     y += 20
-    for (const l of quebrar(atual.nome, 31)) { partes.push(`<text x="0" y="${y + 10}" class="t1 p forte">${esc(l)}</text>`); y += 17 }
+    for (const l of quebrar(atual.nome, 28)) { partes.push(`<text x="0" y="${y + 10}" class="t1 p forte">${esc(l)}</text>`); y += 18 }
   }
   const altura = Math.ceil(y + 6)
   return { svg: envolver(partes.join(''), altura), altura, agora: { barra: r.total ? r.feitas / r.total : 0, anel: r.tempo.fracao } }
@@ -414,8 +427,8 @@ export function svgUso(u: UsoVisto, agora: number, antes: UsoAnterior | null, pe
     ['Semana', u.semana, true, antes?.semana ?? null],
   ]
   if (!u.sessao && !u.semana) {
-    for (const l of quebrar('Os limites aparecem depois da primeira resposta do Claude nesta conversa.', 31)) {
-      partes.push(`<text x="0" y="${y + 10}" class="t3 p">${esc(l)}</text>`); y += 17
+    for (const l of quebrar('Os limites aparecem depois da primeira resposta do Claude nesta conversa.', 28)) {
+      partes.push(`<text x="0" y="${y + 10}" class="t3 p">${esc(l)}</text>`); y += 18
     }
   } else if (pequeno) {
     // Recolhido: duas barras curtas, uma por janela.
@@ -434,20 +447,19 @@ export function svgUso(u: UsoVisto, agora: number, antes: UsoAnterior | null, pe
     }
   } else {
     // Dois anéis lado a lado, cada um com a sua legenda e a renovação embaixo.
-    const d = 88
-    const gap = L - 2 * d
+    const d = DIAM
     janelas.forEach(([nome, j, semanal, de], i) => {
-      const cx = d / 2 + i * (d + gap)
+      const cx = CENTROS[i] as number
       if (!j) {
         partes.push(`<circle cx="${cx}" cy="${y + d / 2}" r="${(d - TRACO) / 2}" fill="none" class="trilhoS" stroke-width="${TRACO}"/>`)
         partes.push(`<text x="${cx}" y="${y + d / 2 + 4}" text-anchor="middle" class="t3 pp">sem leitura</text>`)
       } else {
         anel(partes, cx, y + d / 2, d, j.pct / 100, corDoUso(j.pct), `${Math.round(j.pct)}%`, 'usado', de === null ? null : de / 100)
       }
-      partes.push(`<text x="${cx}" y="${y + d + 16}" text-anchor="middle" class="t1 p forte">${nome}</text>`)
-      partes.push(`<text x="${cx}" y="${y + d + 32}" text-anchor="middle" class="t3 pp">${esc(j ? renovaEm(j.renova, agora, semanal) : '')}</text>`)
+      partes.push(`<text x="${cx}" y="${y + d + 19}" text-anchor="middle" class="t1 p forte">${nome}</text>`)
+      partes.push(`<text x="${cx}" y="${y + d + 36}" text-anchor="middle" class="t3 pp">${esc(j ? renovaEm(j.renova, agora, semanal) : '')}</text>`)
     })
-    y += d + 42
+    y += d + 48
   }
   if (u.custo !== undefined) {
     partes.push(`<text x="0" y="${y + 10}" class="t3 p">Esta conversa</text>`)

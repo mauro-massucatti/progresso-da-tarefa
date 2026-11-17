@@ -2,7 +2,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Limites, Plano, Vez } from '../types/valores'
 import { avancar, concluirTudo, contar, corDaPizza, corDoAnel, duracao, hora, marcar, mosaico, situacaoDe, trocarEtapas } from './logica'
-import { COR, L, corDoUso, novosAnteriores, novosUsos, renovaEm, retrato, svgUso, textoUso, svgCompacto, svgDetalhe, svgEtapas, svgPainel, textoAlternativo } from './desenho'
+import { COR, LARG, corDoUso, novosAnteriores, novosUsos, renovaEm, retrato, svgUso, textoUso, svgCompacto, svgDetalhe, svgEtapas, svgPainel, textoAlternativo } from './desenho'
 import type { UsoVisto } from './desenho'
 import { est } from './estado'
 import type { Estado } from './estado'
@@ -290,15 +290,15 @@ export const register: Register = on => {
       const chaveUso = `${e.surface}:${recolhido0 ? 'c' : 'p'}`
       const u = svgUso(lim, agora, usosAnteriores.get(chaveUso) ?? null, recolhido0)
       usosAnteriores.set(chaveUso, u.agora)
-      uso = <Svg source={u.svg} alt={textoUso(lim, agora)} width={L + 4} height={u.altura} />
+      uso = <Svg source={u.svg} alt={textoUso(lim, agora)} width={LARG} height={u.altura} />
     }
 
     if (!p || !p.etapas.length) {
       return (
-        <Box flexDirection="column" gap={1} width={34}>
+        <Box flexDirection="column" gap={1} width={e.surface === 'terminal' ? 34 : undefined} paddingX={e.surface === 'terminal' ? 0 : 'sm'}>
+          {uso}
           <Text weight="semibold">Nenhuma tarefa em andamento</Text>
           <Text dimColor wrap="wrap">O andamento aparece aqui quando o Claude montar a lista de etapas de uma tarefa.</Text>
-          {uso}
         </Box>
       )
     }
@@ -342,6 +342,7 @@ export const register: Register = on => {
       const marca = (s: string) => (s === 'feita' ? '✓' : s === 'agora' ? '●' : '○')
       return (
         <Box flexDirection="column" gap={1} width={30}>
+          {uso}
           <Box flexDirection="column">
             <Text weight="semibold" color={r.cor}>● {r.rotulo}</Text>
             {(r.aviso ?? r.agora) && <Text wrap="wrap">{r.aviso ?? r.agora}</Text>}
@@ -376,7 +377,6 @@ export const register: Register = on => {
               ))}
             </Box>
           )}
-          {uso}
           {arquivos}
           {controles}
         </Box>
@@ -389,9 +389,9 @@ export const register: Register = on => {
       const d = svgCompacto(r, anteriores.get(chave) ?? null)
       anteriores.set(chave, d.agora)
       return (
-        <Box flexDirection="column" gap={1}>
-          <Svg source={d.svg} alt={textoAlternativo(r)} width={L + 4} height={d.altura} />
+        <Box flexDirection="column" gap={1} paddingX="sm">
           {uso}
+          <Svg source={d.svg} alt={textoAlternativo(r)} width={LARG} height={d.altura} />
           {controles}
         </Box>
       )
@@ -401,12 +401,12 @@ export const register: Register = on => {
     const et = svgEtapas(r)
     const det = aberta ? svgDetalhe(r, aberta) : null
     return (
-      <Box flexDirection="column" gap={1}>
-        <Svg source={d.svg} alt={textoAlternativo(r)} width={L + 4} height={d.altura} />
-        <Svg source={et.svg} alt={`Etapas: ${r.etapas.map((x, i) => `${i + 1}. ${x.nome} (${x.situacao === 'feita' ? 'concluída' : x.situacao === 'agora' ? 'em andamento' : 'pendente'})`).join('; ')}`} width={L + 4} height={et.altura} />
-        {seletor}
-        {det && <Svg source={det.svg} alt="O que foi feito na etapa escolhida" width={L + 4} height={det.altura} />}
+      <Box flexDirection="column" gap={1} paddingX="sm">
         {uso}
+        <Svg source={d.svg} alt={textoAlternativo(r)} width={LARG} height={d.altura} />
+        <Svg source={et.svg} alt={`Etapas: ${r.etapas.map((x, i) => `${i + 1}. ${x.nome} (${x.situacao === 'feita' ? 'concluída' : x.situacao === 'agora' ? 'em andamento' : 'pendente'})`).join('; ')}`} width={LARG} height={et.altura} />
+        {seletor}
+        {det && <Svg source={det.svg} alt="O que foi feito na etapa escolhida" width={LARG} height={det.altura} />}
         {arquivos}
         {controles}
       </Box>
