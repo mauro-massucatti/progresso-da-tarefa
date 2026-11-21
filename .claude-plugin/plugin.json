@@ -1,7 +1,7 @@
 {
   "name": "progresso-da-tarefa",
   "displayName": "Andamento da tarefa",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Mostra em barra, pizza e círculo quanto da tarefa da sessão já foi feito, quanto falta, o que o Claude está fazendo, quanto dos limites do plano (sessão atual e semana) já foi usado e quais habilidades, conectores e assistentes entraram na conversa, em português",
   "author": {
     "name": "Mauro Massucatti Netto"

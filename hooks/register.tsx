@@ -381,7 +381,7 @@ export const register: Register = on => {
           </Box>
           <Box flexDirection="column">
             <Text weight="semibold">{r.percentual}% <Text dimColor>· {r.feitas} de {r.total} concluídas</Text></Text>
-            <Progress label="Trabalho concluído" value={r.feitas} max={Math.max(1, r.total)} valueText={`${r.percentual}%`} color={COR.feita} />
+            <Progress label="Andamento" value={r.feitas} max={Math.max(1, r.total)} valueText={`${r.percentual}%`} color={COR.feita} />
           </Box>
           {!recolhido && (
             <Box flexDirection="column">
@@ -457,7 +457,7 @@ export const register: Register = on => {
     return (
       <Box flexDirection="row" gap={1} alignItems="center">
         <Box width={14}>
-          <Progress label="Trabalho concluído" value={r.feitas} max={Math.max(1, r.total)} valueText={`${r.percentual}%`} color={COR.feita} />
+          <Progress label="Andamento" value={r.feitas} max={Math.max(1, r.total)} valueText={`${r.percentual}%`} color={COR.feita} />
         </Box>
         <Text><Text color={r.cor}>●</Text> {texto}</Text>
         <Button key="ver" label="Ver painel" plain onPress={async () => {
