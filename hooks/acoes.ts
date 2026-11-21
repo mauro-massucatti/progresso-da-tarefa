@@ -1,5 +1,5 @@
 // O que o Claude está fazendo, dito em palavras comuns, e o registro do que a tarefa produziu.
-import type { Arquivo, Plano } from '../types/valores'
+import type { Arquivo, Plano, Recurso, TipoRecurso } from '../types/valores'
 
 const base = (caminho: unknown): string => {
   const s = String(caminho ?? '')
@@ -12,25 +12,28 @@ const curto = (s: unknown, n = 40): string => {
 }
 
 // Servidores conhecidos, pelo trecho do nome da ferramenta (mcp__<servidor>__<ferramenta>).
-const SERVIDORES: [RegExp, string][] = [
-  [/^stj$/, 'Consultando o STJ'],
-  [/^tjes$/, 'Consultando o TJES'],
-  [/^jusia$/, 'Consultando a Jus IA'],
-  [/^legislacao$/, 'Conferindo a lei no Planalto'],
-  [/^datajud$/, 'Consultando processos no DataJud'],
-  [/^notebooklm$/, 'Consultando o NotebookLM'],
-  [/^gemini$/, 'Consultando o Gemini'],
-  [/^zotero$/, 'Consultando o Zotero'],
-  [/^(mcp-obsidian|qmd|graphify)$/, 'Consultando o vault'],
-  [/^brasilapi$/, 'Consultando dados públicos'],
-  [/^diligencia$/, 'Pesquisando em fontes públicas'],
-  [/^(docling|adeu)$/, 'Lendo um documento'],
-  [/^devonthink$/, 'Consultando o DEVONthink'],
-  [/^apple-events$/, 'Consultando lembretes e agenda'],
-  [/^transcribex$/, 'Transcrevendo áudio'],
-  [/^(claude-in-chrome|Claude_Browser)$/, 'Usando o navegador'],
-  [/^computer-use$/, 'Usando o computador'],
-  [/^scheduled-tasks$/, 'Cuidando de uma rotina agendada'],
+const SERVIDORES: [RegExp, string, string][] = [
+  [/^stj$/, 'Consultando o STJ', 'STJ'],
+  [/^tjes$/, 'Consultando o TJES', 'TJES'],
+  [/^jusia$/, 'Consultando a Jus IA', 'Jus IA'],
+  [/^legislacao$/, 'Conferindo a lei no Planalto', 'Legislação (Planalto)'],
+  [/^datajud$/, 'Consultando processos no DataJud', 'DataJud'],
+  [/^notebooklm$/, 'Consultando o NotebookLM', 'NotebookLM'],
+  [/^gemini$/, 'Consultando o Gemini', 'Gemini'],
+  [/^zotero$/, 'Consultando o Zotero', 'Zotero'],
+  [/^mcp-obsidian$/, 'Consultando o vault', 'Vault (Obsidian)'],
+  [/^qmd$/, 'Consultando o vault', 'Vault (busca)'],
+  [/^graphify$/, 'Consultando o vault', 'Vault (grafo)'],
+  [/^brasilapi$/, 'Consultando dados públicos', 'BrasilAPI'],
+  [/^diligencia$/, 'Pesquisando em fontes públicas', 'Diligência'],
+  [/^docling$/, 'Lendo um documento', 'Docling'],
+  [/^adeu$/, 'Lendo um documento', 'Word (adeu)'],
+  [/^devonthink$/, 'Consultando o DEVONthink', 'DEVONthink'],
+  [/^apple-events$/, 'Consultando lembretes e agenda', 'Lembretes e Agenda'],
+  [/^transcribex$/, 'Transcrevendo áudio', 'TranscribeX'],
+  [/^(claude-in-chrome|Claude_Browser)$/, 'Usando o navegador', 'Navegador'],
+  [/^computer-use$/, 'Usando o computador', 'Controle do Mac'],
+  [/^scheduled-tasks$/, 'Cuidando de uma rotina agendada', 'Rotinas agendadas'],
 ]
 
 // Ferramentas internas que não são trabalho visível para a pessoa.
@@ -114,3 +117,43 @@ export function registrar(plano: Plano, frase: string | null, arquivo: string | 
 }
 
 export const nomeDoArquivo = base
+
+// Recursos da conversa: habilidades, conectores e assistentes que entraram no trabalho.
+// Ideia inspirada no Mod Session Activity (tinesoft/claude-mods, licença MIT); código próprio.
+export function recursoDe(tool: string, a: Record<string, unknown>): { tipo: TipoRecurso; nome: string } | null {
+  if (tool === 'Skill') {
+    const nome = String(a.skill ?? '').split(':').pop() ?? ''
+    return nome ? { tipo: 'skill', nome } : null
+  }
+  if (tool === 'Agent' || tool === 'Task') {
+    const t = String(a.subagent_type ?? '').trim()
+    return { tipo: 'agente', nome: t === 'fork' ? 'cópia do Claude' : t || 'assistente geral' }
+  }
+  const m = tool.match(/^mcp__(.+?)__(.+)$/)
+  if (!m || SILENCIO.test(tool)) return null
+  const servidor = m[1] ?? ''
+  for (const [rx, , nome] of SERVIDORES) if (rx.test(servidor)) return { tipo: 'conector', nome }
+  if (/^[0-9a-f]{8}-/.test(servidor)) return { tipo: 'conector', nome: `conector ${servidor.slice(0, 8)}` }
+  return { tipo: 'conector', nome: servidor.replace(/[-_]/g, ' ') }
+}
+
+export const chaveDe = (r: { tipo: TipoRecurso; nome: string }) => `${r.tipo}:${r.nome}`
+
+// Soma uma ocorrência ao registro da conversa. Problemas (bloqueio, falha) ficam marcados no próprio recurso.
+export function anotarRecurso(lista: Recurso[], r: { tipo: TipoRecurso; nome: string }, agora: number, falhou = false): Recurso[] {
+  const chave = chaveDe(r)
+  const velho = lista.find(x => chaveDe(x) === chave)
+  const novo: Recurso = velho
+    ? { ...velho, vezes: velho.vezes + 1, falhas: (velho.falhas ?? 0) + (falhou ? 1 : 0), ultima: agora }
+    : { tipo: r.tipo, nome: r.nome, vezes: 1, falhas: falhou ? 1 : 0, ultima: agora }
+  return [...lista.filter(x => chaveDe(x) !== chave), novo].slice(-40)
+}
+
+// Marca na etapa em curso o recurso que ela usou.
+export function marcarNaEtapa(plano: Plano, r: { tipo: TipoRecurso; nome: string }): Plano {
+  const i = plano.etapas.findIndex(e => e.situacao === 'agora')
+  const e = plano.etapas[i]
+  if (!e || (e.usou ?? []).includes(r.nome)) return plano
+  const etapas = plano.etapas.map((x, j) => (j === i ? { ...x, usou: [...(x.usou ?? []), r.nome].slice(-10) } : x))
+  return { ...plano, etapas }
+}

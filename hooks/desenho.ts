@@ -1,7 +1,7 @@
 // Retrato único do andamento e os desenhos do painel.
 // Tudo o que o painel, a faixa e o terminal mostram sai de `retrato()`: um só cálculo,
 // para que nenhum indicador fique atrás dos outros.
-import type { Arquivo, Etapa, Plano, Vez } from '../types/valores'
+import type { Arquivo, Etapa, Plano, Recurso, TipoRecurso, Vez } from '../types/valores'
 import { duracao, estimarRestante, hora } from './logica'
 
 const MIN = 60_000
@@ -26,7 +26,7 @@ export type Retrato = {
   pendentes: number
   percentual: number          // feitas / total, sem meio-termo
   atual: number               // número da etapa da vez (0 se concluída)
-  etapas: { nome: string; situacao: 'feita' | 'agora' | 'falta'; duracao?: string; acoes: string[] }[]
+  etapas: { nome: string; situacao: 'feita' | 'agora' | 'falta'; duracao?: string; acoes: string[]; usou: string[] }[]
   agora: string | null        // o que o Claude está fazendo, em palavras comuns
   naEtapa: string | null      // há quanto tempo está na etapa atual
   aviso: string | null        // pedido à pessoa quando a vez é dela
@@ -67,7 +67,7 @@ export function retrato(plano: Plano, agora: number, vez: Vez = 'claude'): Retra
   const atual = idx >= 0 ? idx + 1 : proxima >= 0 ? proxima + 1 : 0
   const etapaAtual: Etapa | undefined = idx >= 0 ? plano.etapas[idx] : undefined
   const etapas = plano.etapas.map(e => ({
-    nome: e.nome, situacao: e.situacao, acoes: e.acoes ?? [],
+    nome: e.nome, situacao: e.situacao, acoes: e.acoes ?? [], usou: e.usou ?? [],
     duracao: e.situacao === 'feita' && e.inicio && e.fim ? curta(e.fim - e.inicio) : undefined,
   }))
   const uso = plano.usoInicio !== undefined && plano.usoAgora !== undefined ? Math.max(0, Math.round(plano.usoAgora - plano.usoInicio)) : null
@@ -346,6 +346,19 @@ export function svgDetalhe(r: Retrato, n: number): { svg: string; altura: number
   for (const l of quebrar(e.nome, 28)) { partes.push(`<text x="0" y="${y + 10}" class="t1 p forte">${esc(l)}</text>`); y += 18 }
   partes.push(`<text x="0" y="${y + 10}" class="t3 p">${esc(situacao)}</text>`)
   y += 22
+  if (e.usou.length) {
+    partes.push(`<text x="0" y="${y + 10}" class="cap">USOU</text>`)
+    y += 18
+    // Quebra entre itens, nunca no meio de um nome, e o separador fica no fim da linha.
+    const linhas: string[] = []
+    for (const nome of e.usou) {
+      const ult = linhas[linhas.length - 1]
+      if (ult !== undefined && (ult + ' · ' + nome).length <= 30) linhas[linhas.length - 1] = ult + ' · ' + nome
+      else { if (ult !== undefined) linhas[linhas.length - 1] = ult + ' ·'; linhas.push(nome) }
+    }
+    for (const l of linhas.slice(0, 4)) { partes.push(`<text x="0" y="${y + 10}" class="t2 pp">${esc(l)}</text>`); y += 16 }
+    y += 8
+  }
   if (!e.acoes.length) { partes.push(`<text x="0" y="${y + 10}" class="t3 p">Nenhuma ação registrada.</text>`); y += 18 }
   for (const a of e.acoes.slice(-8)) {
     partes.push(`<circle cx="3" cy="${y + 6}" r="1.8" class="t3"/>`)
@@ -470,4 +483,78 @@ export function svgUso(u: UsoVisto, agora: number, antes: UsoAnterior | null, pe
   return { svg: envolver(partes.join(''), altura), altura, agora: { sessao: u.sessao?.pct ?? 0, semana: u.semana?.pct ?? 0 } }
 }
 
+// Recursos da conversa: o que foi barrado primeiro, depois autorizações, habilidades, conectores e assistentes.
+const GRUPOS: [TipoRecurso, string, string][] = [
+  ['bloqueio', 'Barrados', COR.erro],
+  ['autorizacao', 'Pediram sua autorização', COR.espera],
+  ['skill', 'Habilidades', COR.feita],
+  ['conector', 'Conectores', COR.espera],
+  ['agente', 'Assistentes', COR.agora],
+]
+function marca(tipo: TipoRecurso, cor: string, cy: number): string {
+  if (tipo === 'skill') return `<rect x="0.5" y="${cy - 4}" width="8" height="8" rx="1.5" style="fill:${cor}"/>`
+  if (tipo === 'conector') return `<path d="M4.5,${cy - 5} L9.5,${cy} L4.5,${cy + 5} L-0.5,${cy} Z" style="fill:${cor}"/>`
+  if (tipo === 'bloqueio') return `<path d="M4.5,${cy - 5} L9.5,${cy + 4} L-0.5,${cy + 4} Z" style="fill:${cor}"/>`
+  if (tipo === 'autorizacao') return `<circle cx="4.5" cy="${cy}" r="3.8" fill="none" stroke-width="1.6" style="stroke:${cor}"/>`
+  return `<circle cx="4.5" cy="${cy}" r="4.3" style="fill:${cor}"/>`
+}
+
+export function textoRecursos(lista: Recurso[]): string {
+  if (!lista.length) return 'Recursos da conversa: nenhum ainda.'
+  const partes = GRUPOS.map(([tipo, nome]) => {
+    const g = lista.filter(x => x.tipo === tipo)
+    return g.length ? `${nome}: ${g.map(x => `${x.nome} (${x.vezes}${x.falhas ? `, ${x.falhas} com falha` : ''})`).join(', ')}` : ''
+  }).filter(Boolean)
+  return `Recursos da conversa. ${partes.join('. ')}.`
+}
+
+export function svgRecursos(lista: Recurso[]): { svg: string; altura: number } {
+  const partes: string[] = []
+  let y = 0
+  partes.push(`<text x="0" y="${y + 10}" class="cap">RECURSOS DA CONVERSA</text>`)
+  y += 22
+  if (!lista.length) {
+    for (const l of quebrar('Habilidades, conectores e assistentes aparecem aqui quando o Claude usar.', 28)) {
+      partes.push(`<text x="0" y="${y + 10}" class="t3 p">${esc(l)}</text>`); y += 18
+    }
+  }
+  let mostrados = 0
+  const MAX = 14
+  for (const [tipo, titulo, cor] of GRUPOS) {
+    const g = lista.filter(x => x.tipo === tipo).sort((a, b) => b.vezes - a.vezes || b.ultima - a.ultima)
+    if (!g.length || mostrados >= MAX) continue
+    partes.push(`<text x="0" y="${y + 10}" class="pp forte" style="fill:${tipo === 'bloqueio' ? COR.erro : 'var(--t3)'}">${esc(titulo)}</text>`)
+    y += 19
+    for (const x of g) {
+      if (mostrados >= MAX) break
+      const nome = x.nome.length > 24 ? x.nome.slice(0, 23).trimEnd() + '…' : x.nome
+      partes.push(marca(tipo, cor, y + 6))
+      partes.push(`<text x="16" y="${y + 10}" class="t2 p">${esc(nome)}</text>`)
+      partes.push(`<text x="${L}" y="${y + 10}" text-anchor="end" class="t1 pp num2">×${x.vezes}</text>`)
+      y += 19
+      if (x.falhas) {
+        partes.push(`<text x="16" y="${y + 7}" class="pp" style="fill:${COR.erro}">${x.falhas > 1 ? `${x.falhas} chamadas falharam` : '1 chamada falhou'}</text>`)
+        y += 16
+      }
+      mostrados++
+    }
+    y += 8
+  }
+  if (lista.length > mostrados) { partes.push(`<text x="0" y="${y + 10}" class="t3 pp">e mais ${lista.length - mostrados}</text>`); y += 18 }
+  const altura = Math.ceil(y + 2)
+  return { svg: envolver(partes.join(''), altura), altura }
+}
+
 export const novosUsos = () => new Map<string, UsoAnterior>()
+
+// Versão em texto, para o terminal: bloqueios primeiro, depois habilidades, conectores e assistentes.
+export function linhasRecursos(lista: Recurso[]): { texto: string; problema: boolean }[] {
+  const ordem = GRUPOS.map(g => g[0])
+  return [...lista]
+    .sort((a, b) => ordem.indexOf(a.tipo) - ordem.indexOf(b.tipo) || b.vezes - a.vezes)
+    .slice(0, 12)
+    .map(x => ({
+      texto: `${GRUPOS.find(g => g[0] === x.tipo)?.[1] ?? 'Recurso'}: ${x.nome} ×${x.vezes}${x.falhas ? ` (${x.falhas} com falha)` : ''}`,
+      problema: x.tipo === 'bloqueio' || !!x.falhas,
+    }))
+}

@@ -21,6 +21,7 @@ export function trocarEtapas(
     if (velha?.inicio) etapa.inicio = velha.inicio
     if (velha?.fim) etapa.fim = velha.fim
     if (velha?.acoes?.length) etapa.acoes = velha.acoes
+    if (velha?.usou?.length) etapa.usou = velha.usou
     if (n.situacao !== 'falta' && !etapa.inicio) etapa.inicio = agora
     if (n.situacao === 'feita' && !etapa.fim) etapa.fim = agora
     if (n.situacao !== 'feita') delete etapa.fim

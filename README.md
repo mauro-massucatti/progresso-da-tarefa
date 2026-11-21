@@ -22,6 +22,7 @@ Uma coluna estreita (cerca de 200 px), lida de cima para baixo, desenhada com a 
 7. **Arquivos entregues**: cada arquivo criado ou alterado na tarefa, com botão para abrir.
 8. **Resumo ao concluir**: horário de início e fim, etapas, arquivos, ações com erro e quanto do limite de 5 horas a tarefa usou.
 9. **Uso do plano**: dois anéis com o percentual já usado da sessão atual (limite de 5 horas) e da semana, quando cada um renova e o gasto da conversa, atualizados sempre que mudam.
+10. **Recursos da conversa**: as habilidades (skills), os conectores (MCP) e os assistentes que o Claude usou, com quantas vezes e quantas chamadas falharam. O que foi barrado vem primeiro e também gera um aviso na tela. Em "Ver o que foi feito numa etapa", a lista "Usou" mostra os recursos daquela etapa.
 
 ## Botões no painel
 
@@ -49,7 +50,7 @@ Da lista de etapas que o Claude mantém na sessão: a do app (abaixo das mensage
 
 ## O que o Mod lê, guarda e faz
 
-1. **Ganchos nas chamadas de ferramenta (`tool.call`).** O Mod observa toda chamada de ferramenta da sessão, inclusive as de servidores MCP e de comandos do terminal, só para ler o nome da ferramenta e o caminho do arquivo gravado, e com isso escrever em português o que está sendo feito ("Consultando o STJ", "Escrevendo Parecer.docx") e listar os arquivos da tarefa. Ele repassa cada chamada sem alterá-la, sem bloqueá-la e sem responder no lugar da ferramenta. Nas cinco ferramentas da lista de etapas (`mcp__ccd_turn__update_plan`, `mcp__ccd_turn__wrap_up`, `TodoWrite`, `TaskCreate`, `TaskUpdate`) ele lê as etapas e a situação de cada uma.
+1. **Ganchos nas chamadas de ferramenta (`tool.call`).** O Mod observa toda chamada de ferramenta da sessão, inclusive as de servidores MCP e de comandos do terminal, só para ler o nome da ferramenta, o nome da habilidade ou do assistente chamado e o caminho do arquivo gravado, e com isso escrever em português o que está sendo feito ("Consultando o STJ", "Escrevendo Parecer.docx"), listar os arquivos da tarefa e contar os recursos usados e as chamadas barradas. Nunca guarda o conteúdo das chamadas. Ele repassa cada chamada sem alterá-la, sem bloqueá-la e sem responder no lugar da ferramenta. Nas cinco ferramentas da lista de etapas (`mcp__ccd_turn__update_plan`, `mcp__ccd_turn__wrap_up`, `TodoWrite`, `TaskCreate`, `TaskUpdate`) ele lê as etapas e a situação de cada uma.
 2. **Pedido e turnos (`prompt.submit`, `turn.start`, `turn.complete`).** Guarda o texto do seu último pedido para dar nome à tarefa e percebe quando o Claude parou esperando você. Não altera o pedido.
 3. **Limites de uso.** Lê o percentual já usado dos limites de 5 horas e semanal da sua conta, a data de renovação de cada um e o gasto da conversa, que o próprio Claude Code informa, para mostrar quanto a tarefa e a semana consumiram. Não lê nem usa senha, chave ou token.
 4. **Memória.** Guarda o andamento de cada sessão no armazenamento do próprio Mod no Claude Code, por até 14 dias, e apaga o que for mais antigo.
@@ -78,3 +79,5 @@ No app Desktop, onde `/plugin` não funciona: clique em + ao lado da caixa de te
 ## Licença
 
 MIT. Veja [LICENSE](LICENSE).
+
+A seção "Recursos da conversa" foi inspirada no Mod [Session Activity](https://github.com/tinesoft/claude-mods/tree/main/mods/session-activity), de Tine Kondo (licença MIT); o código aqui é próprio.

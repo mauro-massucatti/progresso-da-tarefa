@@ -2,11 +2,11 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Limites, Plano, Vez } from '../types/valores'
 import { avancar, concluirTudo, contar, corDaPizza, corDoAnel, duracao, hora, marcar, mosaico, situacaoDe, trocarEtapas } from './logica'
-import { COR, LARG, corDoUso, novosAnteriores, novosUsos, renovaEm, retrato, svgUso, textoUso, svgCompacto, svgDetalhe, svgEtapas, svgPainel, textoAlternativo } from './desenho'
+import { COR, LARG, corDoUso, linhasRecursos, novosAnteriores, svgRecursos, textoRecursos, novosUsos, renovaEm, retrato, svgUso, textoUso, svgCompacto, svgDetalhe, svgEtapas, svgPainel, textoAlternativo } from './desenho'
 import type { UsoVisto } from './desenho'
 import { est } from './estado'
 import type { Estado } from './estado'
-import { acaoEmPalavras, arquivoGravado, nomeDoArquivo, registrar } from './acoes'
+import { acaoEmPalavras, anotarRecurso, arquivoGravado, marcarNaEtapa, nomeDoArquivo, recursoDe, registrar } from './acoes'
 
 const PAINEL = 'progresso'
 const TITULO = 'Andamento da tarefa'
@@ -146,8 +146,20 @@ export const register: Register = on => {
     const resultado = await next(e)
 
     if (tool === 'AskUserQuestion') await mudar($, 'vez', () => 'claude' as Vez)
+    const negado = 'deny' in resultado && !!resultado.deny
+    const rec = recursoDe(tool, a)
+    if (rec || negado) {
+      const agora = await $.clock.now()
+      await mudar($, 'recursos', v => {
+        let lista = v
+        if (rec && !negado) lista = anotarRecurso(lista, rec, agora, !!resultado.isError)
+        if (negado) lista = anotarRecurso(lista, { tipo: 'bloqueio', nome: frase ?? tool }, agora)
+        return lista
+      })
+      if (negado) $.ui.toast(`Barrado: ${frase ?? tool}`, { timeoutMs: 6000 })
+      if (rec && ativo && !negado) await mudar($, 'plano', v => (v ? marcarNaEtapa(v, rec) : v))
+    }
     if (ativo && frase) {
-      const negado = 'deny' in resultado && !!resultado.deny
       const falhou = !negado && !!resultado.isError
       const gravou = !negado && !falhou ? caminho : null
       const agora = await $.clock.now()
@@ -209,7 +221,7 @@ export const register: Register = on => {
         if (alvo && typeof a.subject === 'string') alvo.nome = a.subject
       }
       depois = trocarEtapas(antes, etapas.map(x => ({ nome: x.nome, situacao: x.situacao })), agora, pedido, false)
-      depois.etapas.forEach((x, i) => { x.id = etapas[i]?.id; x.acoes = etapas[i]?.acoes })
+      depois.etapas.forEach((x, i) => { x.id = etapas[i]?.id; x.acoes = etapas[i]?.acoes; x.usou = etapas[i]?.usou })
     }
 
     if (depois && depois !== antes) {
@@ -293,12 +305,31 @@ export const register: Register = on => {
       uso = <Svg source={u.svg} alt={textoUso(lim, agora)} width={LARG} height={u.altura} />
     }
 
+    // Recursos da conversa: o que entrou no trabalho, com os bloqueios primeiro.
+    const usados = est.recursos
+    let rec: JSX.Element
+    if (e.surface === 'terminal') {
+      const linhas = linhasRecursos(usados)
+      rec = (
+        <Box flexDirection="column">
+          <Text dimColor>RECURSOS DA CONVERSA</Text>
+          {!linhas.length && <Text dimColor wrap="wrap">Nenhum ainda.</Text>}
+          {linhas.map(x => <Text color={x.problema ? COR.erro : undefined} wrap="truncate-end">{x.texto}</Text>)}
+        </Box>
+      )
+    } else {
+      const { Svg } = $.ui.resolve(e)
+      const d = svgRecursos(usados)
+      rec = <Svg source={d.svg} alt={textoRecursos(usados)} width={LARG} height={d.altura} />
+    }
+
     if (!p || !p.etapas.length) {
       return (
         <Box flexDirection="column" gap={1} width={e.surface === 'terminal' ? 34 : undefined} paddingX={e.surface === 'terminal' ? 0 : 'sm'}>
           {uso}
           <Text weight="semibold">Nenhuma tarefa em andamento</Text>
           <Text dimColor wrap="wrap">O andamento aparece aqui quando o Claude montar a lista de etapas de uma tarefa.</Text>
+          {rec}
         </Box>
       )
     }
@@ -377,6 +408,7 @@ export const register: Register = on => {
               ))}
             </Box>
           )}
+          {!recolhido && rec}
           {arquivos}
           {controles}
         </Box>
@@ -407,6 +439,7 @@ export const register: Register = on => {
         <Svg source={et.svg} alt={`Etapas: ${r.etapas.map((x, i) => `${i + 1}. ${x.nome} (${x.situacao === 'feita' ? 'concluída' : x.situacao === 'agora' ? 'em andamento' : 'pendente'})`).join('; ')}`} width={LARG} height={et.altura} />
         {seletor}
         {det && <Svg source={det.svg} alt="O que foi feito na etapa escolhida" width={LARG} height={det.altura} />}
+        {rec}
         {arquivos}
         {controles}
       </Box>

@@ -6,6 +6,7 @@ export type Etapa = {
   inicio?: number
   fim?: number
   acoes?: string[] // o que foi feito durante a etapa, em palavras comuns
+  usou?: string[]  // habilidades, conectores e assistentes usados na etapa
 }
 export type Arquivo = { caminho: string; acao: 'criado' | 'alterado'; quando: number }
 export type Erro = { quando: number; oque: string }
@@ -27,3 +28,6 @@ export type Vez = 'claude' | 'voce' | 'pergunta'
 // Uso do plano: a janela de 5 horas (a "sessão atual" do Claude) e a semanal, com o gasto da conversa.
 export type Janela = { pct: number; renova?: string }
 export type Limites = { sessao?: Janela; semana?: Janela; custo?: number; lido: number }
+// Recursos da conversa: o que entrou no trabalho e o que foi barrado.
+export type TipoRecurso = 'skill' | 'conector' | 'agente' | 'bloqueio' | 'autorizacao'
+export type Recurso = { tipo: TipoRecurso; nome: string; vezes: number; falhas?: number; ultima: number }
