@@ -437,9 +437,9 @@ export const register: Register = on => {
         {uso}
         <Svg source={d.svg} alt={textoAlternativo(r)} width={LARG} height={d.altura} />
         <Svg source={et.svg} alt={`Etapas: ${r.etapas.map((x, i) => `${i + 1}. ${x.nome} (${x.situacao === 'feita' ? 'concluída' : x.situacao === 'agora' ? 'em andamento' : 'pendente'})`).join('; ')}`} width={LARG} height={et.altura} />
+        {rec}
         {seletor}
         {det && <Svg source={det.svg} alt="O que foi feito na etapa escolhida" width={LARG} height={det.altura} />}
-        {rec}
         {arquivos}
         {controles}
       </Box>
